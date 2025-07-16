@@ -1127,22 +1127,63 @@ const getImposterWord = (targetWord) => {
 };
 
 const app = express();
-app.use(cors());
+
+// Configure CORS for production
+const corsOptions = {
+  origin:
+    process.env.NODE_ENV === "production" ? process.env.CLIENT_URL || "*" : "*",
+  methods: ["GET", "POST"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 
 // Serve static files from public directory
 app.use(express.static("public"));
 
+// Add JSON parsing middleware
+app.use(express.json());
+
 // Basic route for health check
 app.get("/", (req, res) => {
-  res.sendFile(__dirname + "/public/index.html");
+  try {
+    res.sendFile(__dirname + "/public/index.html");
+  } catch (error) {
+    console.error("Error serving index.html:", error);
+    res.status(200).json({
+      message: "Word Imposter Game Server",
+      status: "running",
+      error: "Static files not available",
+    });
+  }
+});
+
+// Health check endpoint for deployment services
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
+});
+
+// API info endpoint
+app.get("/api", (req, res) => {
+  res.json({
+    message: "Word Imposter Game Server",
+    version: "1.0.0",
+    status: "running",
+  });
 });
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin:
+      process.env.NODE_ENV === "production"
+        ? process.env.CLIENT_URL || "*"
+        : "*",
     methods: ["GET", "POST"],
+    credentials: true,
   },
+  transports: ["websocket", "polling"], // Enable both for better compatibility
+  allowEIO3: true, // Backwards compatibility
 });
 
 const rooms = {};
@@ -1919,6 +1960,38 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`Server is listening on port ${PORT}`);
+
+server
+  .listen(PORT, "0.0.0.0", () => {
+    console.log(`Server is listening on port ${PORT}`);
+  })
+  .on("error", (err) => {
+    console.error("Server failed to start:", err);
+    process.exit(1);
+  });
+
+// Handle process termination gracefully
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received, shutting down gracefully");
+  server.close(() => {
+    console.log("Process terminated");
+  });
+});
+
+process.on("SIGINT", () => {
+  console.log("SIGINT received, shutting down gracefully");
+  server.close(() => {
+    console.log("Process terminated");
+  });
+});
+
+// Handle uncaught exceptions
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  process.exit(1);
 });

@@ -1,15 +1,21 @@
 {
-  "name": "server",
+  "name": "word-imposter-server",
   "version": "1.0.0",
-  "description": "",
+  "description": "Server for Word Imposter Game",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": ["game", "websocket", "socketio"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.1.0",
