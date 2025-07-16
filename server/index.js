@@ -1130,13 +1130,26 @@ const app = express();
 
 // Configure CORS for production
 const corsOptions = {
-  origin: [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://localhost:3001",
-    "https://*.vercel.app",
-    process.env.CLIENT_URL || "*",
-  ],
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      "http://localhost:3000",
+      "http://localhost:5173",
+      "http://localhost:3001",
+      "https://word-imposter-game.vercel.app",
+      "https://word-imposter-game-aamosh65s-projects.vercel.app",
+      process.env.CLIENT_URL,
+    ].filter(Boolean); // Remove any undefined values
+
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log("CORS blocked origin:", origin);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   methods: ["GET", "POST"],
   credentials: true,
 };
@@ -1180,18 +1193,41 @@ app.get("/api", (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: [
-      "http://localhost:3000",
-      "http://localhost:5173",
-      "http://localhost:3001",
-      "https://*.vercel.app",
-      process.env.CLIENT_URL || "*",
-    ],
+    origin: function (origin, callback) {
+      const allowedOrigins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:3001",
+        "https://word-imposter-game.vercel.app",
+        "https://word-imposter-game-aamosh65s-projects.vercel.app",
+        process.env.CLIENT_URL,
+      ].filter(Boolean); // Remove any undefined values
+
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.log("Socket.IO CORS blocked origin:", origin);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true,
   },
-  transports: ["websocket", "polling"], // Enable both for better compatibility
+  transports: ["polling", "websocket"], // Enable both, start with polling for better compatibility
   allowEIO3: true, // Backwards compatibility
+  pingTimeout: 60000,
+  pingInterval: 25000,
+});
+
+// Add connection debugging
+io.engine.on("connection_error", (err) => {
+  console.log("Connection error:", err.req); // the request object
+  console.log("Error code:", err.code); // the error code, for example 1
+  console.log("Error message:", err.message); // the error message, for example "Session ID unknown"
+  console.log("Error context:", err.context); // some additional error context
 });
 
 const rooms = {};
