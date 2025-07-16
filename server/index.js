@@ -1130,8 +1130,13 @@ const app = express();
 
 // Configure CORS for production
 const corsOptions = {
-  origin:
-    process.env.NODE_ENV === "production" ? process.env.CLIENT_URL || "*" : "*",
+  origin: [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:3001",
+    "https://*.vercel.app",
+    process.env.CLIENT_URL || "*",
+  ],
   methods: ["GET", "POST"],
   credentials: true,
 };
@@ -1175,10 +1180,13 @@ app.get("/api", (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin:
-      process.env.NODE_ENV === "production"
-        ? process.env.CLIENT_URL || "*"
-        : "*",
+    origin: [
+      "http://localhost:3000",
+      "http://localhost:5173",
+      "http://localhost:3001",
+      "https://*.vercel.app",
+      process.env.CLIENT_URL || "*",
+    ],
     methods: ["GET", "POST"],
     credentials: true,
   },

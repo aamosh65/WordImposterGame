@@ -5,13 +5,15 @@ import "./App.css";
 const backendUrl =
   window.location.hostname === "localhost"
     ? "http://localhost:3001"
-    : `${window.location.protocol}//${window.location.hostname}:3001`;
+    : "https://wordimpostergame.onrender.com";
 
 const socket: Socket = io(backendUrl, {
   transports: ["polling", "websocket"],
   autoConnect: true,
   reconnection: true,
-  timeout: 5000,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+  timeout: 20000,
 });
 
 const categories = {
