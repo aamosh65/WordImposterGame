@@ -1,19 +1,83 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import "./App.css";
 
-const backendUrl =
-  window.location.hostname === "localhost"
-    ? "http://localhost:3001"
-    : "https://wordimpostergame.onrender.com";
+// Wake Lock API types
+interface WakeLockSentinel {
+  released: boolean;
+  type: string;
+  release(): Promise<void>;
+  addEventListener(type: string, listener: EventListener): void;
+  removeEventListener(type: string, listener: EventListener): void;
+}
+
+interface WakeLockNavigator {
+  wakeLock: {
+    request(type: "screen"): Promise<WakeLockSentinel>;
+  };
+}
+
+// Your computer's local IP addresses for different networks
+const localIps = [
+  "192.168.1.10", // Your friend's house IP address (current location)
+  "192.168.100.240", // Your house IP address
+];
+
+// Function to determine the correct backend URL
+const getBackendUrl = () => {
+  const hostname = window.location.hostname;
+
+  if (hostname === "localhost") {
+    return "http://localhost:3001";
+  }
+
+  // Check if we're accessing from one of the known local IPs
+  if (localIps.includes(hostname)) {
+    return `http://${hostname}:3001`;
+  }
+
+  // For mobile devices or when accessing via IP, use the first IP (current location)
+  if (
+    isMobileDevice ||
+    localIps.some((ip) => hostname.includes(ip.split(".")[0]))
+  ) {
+    return `http://${localIps[0]}:3001`;
+  }
+
+  // Default to production server
+  return "https://wordimpostergame.onrender.com";
+};
+
+const backendUrl = getBackendUrl();
+
+// Detect if running on mobile device
+const isMobileDevice =
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
+
+// Debug logging for mobile
+if (isMobileDevice) {
+  console.log("📱 Mobile device detected:", navigator.userAgent);
+  console.log("📱 Backend URL:", backendUrl);
+  console.log("📱 Socket.IO transport config:", ["polling"]);
+}
 
 const socket: Socket = io(backendUrl, {
-  transports: ["polling", "websocket"],
+  // Always use polling first for mobile devices to avoid CORS issues
+  transports: isMobileDevice ? ["polling"] : ["websocket", "polling"],
   autoConnect: true,
   reconnection: true,
-  reconnectionAttempts: 5,
-  reconnectionDelay: 1000,
-  timeout: 20000,
+  reconnectionAttempts: 15, // Increased for mobile
+  reconnectionDelay: 500, // Faster initial reconnection for mobile
+  reconnectionDelayMax: 3000, // Lower max delay for mobile
+  timeout: 45000, // Increased timeout for slower mobile connections
+  forceNew: false,
+  // Mobile-specific options
+  upgrade: !isMobileDevice, // Disable upgrade for mobile to stick with polling
+  rememberUpgrade: false,
+  // Enable CORS for mobile browsers
+  withCredentials: false,
 });
 
 const categories = {
@@ -709,7 +773,7 @@ function App() {
   const [revealedWord, setRevealedWord] = useState("");
   const [customWord, setCustomWord] = useState("");
   const [customImposterWord, setCustomImposterWord] = useState("");
-  const [wordSource, setWordSource] = useState("category");
+  const [wordSource, setWordSource] = useState("random");
   const [hostIsModerator, setHostIsModerator] = useState(false); // Whether host is acting as moderator
 
   // Debug wordSource changes
@@ -731,6 +795,13 @@ function App() {
   const [isMobile, setIsMobile] = useState(false);
   const [showWordOverlay, setShowWordOverlay] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [connectionAttempts, setConnectionAttempts] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<
+    "connecting" | "connected" | "reconnecting" | "failed"
+  >("connecting");
+  const [networkStatus, setNetworkStatus] = useState<"online" | "offline">(
+    "online"
+  );
   const [bubbles, setBubbles] = useState(
     Array.from({ length: isMobile ? 10 : 20 }, () => ({
       top: `${Math.random() * 100}%`,
@@ -750,6 +821,7 @@ function App() {
   } | null>(null);
   const [hasVoted, setHasVoted] = useState(false);
   const [hasFinalVoted, setHasFinalVoted] = useState(false);
+  const [finalVoteChoice, setFinalVoteChoice] = useState<boolean | null>(null);
   const [showVotingOverlay, setShowVotingOverlay] = useState(false);
   const [selectedVote, setSelectedVote] = useState("");
   const [votingStarted, setVotingStarted] = useState(false);
@@ -768,6 +840,338 @@ function App() {
     endVotes: number;
     totalVoters: number;
   }>({ continueVotes: 0, endVotes: 0, totalVoters: 0 });
+
+  // Chat functionality
+  const [chatMessages, setChatMessages] = useState<
+    Array<{
+      id: string;
+      senderId: string;
+      senderName: string;
+      message: string;
+      timestamp: number;
+      isCurrentTurn?: boolean;
+    }>
+  >([]);
+  const [currentMessage, setCurrentMessage] = useState("");
+
+  // Turn-based chat system
+  const [currentTurnPlayerId, setCurrentTurnPlayerId] = useState<string | null>(
+    null
+  );
+  const [currentTurnPlayerName, setCurrentTurnPlayerName] =
+    useState<string>("");
+  const [turnDuration, setTurnDuration] = useState<number>(30);
+  const [turnTimeLeft, setTurnTimeLeft] = useState<number>(0);
+  const [turnIndex, setTurnIndex] = useState<number>(0);
+  const [totalPlayers, setTotalPlayers] = useState<number>(0);
+  const [isTurnSystemActive, setIsTurnSystemActive] = useState<boolean>(false);
+
+  // Loading state for start game button
+  const [isStartingGame, setIsStartingGame] = useState<boolean>(false);
+
+  // Toast message state
+  const [toastMessage, setToastMessage] = useState<string>("");
+  const [showToast, setShowToast] = useState<boolean>(false);
+
+  // Game state reset function
+  const resetGameState = useCallback(() => {
+    console.log("Resetting game state, preserving host info:", {
+      hostId,
+      isRoomCreator,
+      mySocketId,
+    });
+
+    setRole(null);
+    setSecretWord("");
+    setImpostorWord("");
+    setPhase("lobby");
+    setGameStarted(false);
+    setImposterName("");
+    setRevealedWord("");
+    setCountdown(null);
+    setDiscussionCountdown(null);
+    setVotingCountdown(null);
+    setCustomWord("");
+    setCustomImposterWord("");
+    setWordSource("random");
+    setHostIsModerator(false); // Reset moderator status
+    setImposterGetsWord(true);
+    // Don't reset discussionTime and votingTime - preserve host's settings for the room
+    // setDiscussionTime(120);
+    // setVotingTime(60);
+    setCategory(Object.keys(categories)[0]);
+    setShowWordOverlay(false);
+    setVotingPhase("none");
+    setVotingResults(null);
+    setHasVoted(false);
+    setHasFinalVoted(false);
+    setFinalVoteChoice(null);
+    setShowVotingOverlay(false);
+    setSelectedVote("");
+    setVotingStarted(false);
+    setIsEliminated(false);
+    setAllEliminatedPlayers([]);
+    setFinalVotingCountdown(null);
+    setFinalVoteCounts({ continueVotes: 0, endVotes: 0, totalVoters: 0 });
+    // Reset chat
+    setChatMessages([]);
+    setCurrentMessage("");
+    // Reset turn system
+    setCurrentTurnPlayerId(null);
+    setCurrentTurnPlayerName("");
+    setTurnDuration(30);
+    setTurnTimeLeft(0);
+    setTurnIndex(0);
+    setTotalPlayers(0);
+    setIsTurnSystemActive(false);
+    // Reset start game loading state
+    setIsStartingGame(false);
+    // Don't reset host information when resetting game state
+    // Only reset when leaving the room completely
+
+    console.log("Game state reset completed, host info preserved");
+  }, [hostId, isRoomCreator, mySocketId]);
+
+  // Wake Lock and Keep-Alive functionality
+  const [wakeLock, setWakeLock] = useState<WakeLockSentinel | null>(null);
+  const [keepAliveInterval, setKeepAliveInterval] = useState<number | null>(
+    null
+  );
+
+  // Keep screen awake during gameplay
+  const requestWakeLock = useCallback(async () => {
+    try {
+      if ("wakeLock" in navigator) {
+        const wakelock = await (
+          navigator as WakeLockNavigator
+        ).wakeLock.request("screen");
+        setWakeLock(wakelock);
+        console.log("📱 Screen wake lock activated");
+
+        wakelock.addEventListener("release", () => {
+          console.log("📱 Screen wake lock released");
+          setWakeLock(null);
+        });
+      }
+    } catch (err) {
+      console.warn("📱 Wake lock not supported or failed:", err);
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    if (wakeLock) {
+      wakeLock.release();
+      setWakeLock(null);
+      console.log("📱 Screen wake lock manually released");
+    }
+  }, [wakeLock]);
+
+  // Keep-alive ping to maintain connection
+  const startKeepAlive = useCallback(() => {
+    if (keepAliveInterval) return;
+
+    const interval = window.setInterval(() => {
+      if (socket.connected && joined) {
+        socket.emit("heartbeat", { roomCode, timestamp: Date.now() });
+        console.log("💓 Heartbeat sent");
+      }
+    }, 30000); // Send heartbeat every 30 seconds
+
+    setKeepAliveInterval(interval);
+    console.log("💓 Keep-alive started");
+  }, [keepAliveInterval, joined, roomCode]);
+
+  const stopKeepAlive = useCallback(() => {
+    if (keepAliveInterval) {
+      window.clearInterval(keepAliveInterval);
+      setKeepAliveInterval(null);
+      console.log("💓 Keep-alive stopped");
+    }
+  }, [keepAliveInterval]);
+
+  // Connection test function for mobile devices
+  const testConnection = useCallback(async () => {
+    console.log("🧪 Testing connection to:", backendUrl);
+    setConnectionStatus("connecting");
+
+    try {
+      // Use the same URL as configured for Socket.IO - don't force HTTPS conversion
+      const testUrl = backendUrl;
+      console.log("📱 Testing HTTP connection to:", testUrl);
+
+      const response = await fetch(testUrl, {
+        method: "GET",
+        mode: "cors",
+        cache: "no-cache",
+        signal: AbortSignal.timeout(10000), // Reduced timeout for faster feedback
+      });
+
+      console.log("📱 HTTP test response status:", response.status);
+
+      if (response.ok || response.status === 404 || response.status === 405) {
+        // 404/405 are fine - server is reachable but endpoint doesn't exist
+        console.log("✅ HTTP connection test passed");
+        // Now try to connect via Socket.IO
+        if (!socket.connected) {
+          console.log("📱 Attempting Socket.IO connection...");
+          socket.connect();
+        }
+      } else {
+        console.log(
+          "❌ HTTP connection test failed with status:",
+          response.status
+        );
+        setConnectionStatus("failed");
+      }
+    } catch (error) {
+      console.log("❌ Connection test failed:", error);
+
+      // Be more specific about network errors
+      if (error instanceof TypeError) {
+        if (error.message.includes("Failed to fetch")) {
+          console.log("📵 Network error detected - marking as offline");
+          setNetworkStatus("offline");
+        } else if (error.message.includes("NetworkError")) {
+          console.log("📵 Network error detected - marking as offline");
+          setNetworkStatus("offline");
+        }
+      }
+
+      setConnectionStatus("failed");
+    }
+  }, []);
+
+  // Enhanced mobile reconnection with connection testing
+  const attemptReconnection = useCallback(() => {
+    if (!socket.connected && joined && roomCode && name) {
+      console.log("🔄 Attempting auto-reconnection...");
+
+      // For mobile devices, only test connection if we've had multiple failures
+      if (isMobileDevice && connectionAttempts > 3) {
+        console.log("📱 Multiple failures - testing connection first");
+        testConnection();
+      } else {
+        // Try direct Socket.IO reconnection first
+        if (!socket.connected) {
+          console.log("📱 Direct Socket.IO reconnection attempt");
+          socket.connect();
+        }
+      }
+
+      // Try to rejoin the room
+      socket.emit(
+        "rejoinRoom",
+        {
+          name: name.trim(),
+          roomCode: roomCode.trim().toUpperCase().replace(/\s/g, ""),
+        },
+        (res: {
+          error?: string;
+          players: { id: string; name: string }[];
+          hostId?: string;
+          gameState?: {
+            active: boolean;
+            phase: string;
+            playerRole?: { role: string; word: string; impostorWord: string };
+            discussionCountdown?: number;
+            votingCountdown?: number;
+          };
+          reconnected?: boolean;
+        }) => {
+          if (res.error) {
+            console.log("❌ Reconnection failed:", res.error);
+            // If room doesn't exist anymore, reset to join screen
+            if (
+              res.error.includes("not found") ||
+              res.error.includes("does not exist")
+            ) {
+              alert("The room no longer exists. Returning to main screen.");
+              setJoined(false);
+              setRoomCode("");
+              setPlayers([]);
+              setHostId("");
+              setIsRoomCreator(false);
+              resetGameState();
+              releaseWakeLock();
+              stopKeepAlive();
+            }
+          } else {
+            console.log("✅ Successfully reconnected to room");
+            setPlayers(res.players);
+            setHostId(res.hostId || res.players[0]?.id);
+
+            // Restore game state if game is ongoing
+            if (res.gameState) {
+              console.log("🎮 Restoring game state...");
+              setGameStarted(res.gameState.active);
+              setPhase(
+                (res.gameState.phase as
+                  | "lobby"
+                  | "countdown"
+                  | "game"
+                  | "gameOver") || "lobby"
+              );
+
+              // Restore role and words if assigned
+              if (res.gameState.playerRole) {
+                setRole(res.gameState.playerRole.role as "imposter" | "player");
+                setSecretWord(res.gameState.playerRole.word || "");
+                setImpostorWord(res.gameState.playerRole.impostorWord || "");
+              }
+
+              // Restore timers if active
+              if (res.gameState.discussionCountdown) {
+                setDiscussionCountdown(res.gameState.discussionCountdown);
+              }
+              if (res.gameState.votingCountdown) {
+                setVotingCountdown(res.gameState.votingCountdown);
+              }
+
+              // Reactivate wake lock if game is active
+              if (res.gameState.active) {
+                requestWakeLock();
+              }
+            }
+
+            // Restart keep-alive
+            startKeepAlive();
+          }
+        }
+      );
+    }
+  }, [
+    joined,
+    roomCode,
+    name,
+    releaseWakeLock,
+    stopKeepAlive,
+    requestWakeLock,
+    startKeepAlive,
+    testConnection,
+    connectionAttempts,
+    resetGameState,
+  ]);
+
+  // Mobile-specific connection initialization
+  useEffect(() => {
+    if (isMobileDevice && !isConnected) {
+      console.log("📱 Initializing mobile connection...");
+
+      // For mobile devices, wait longer before testing connection
+      // This gives Socket.IO more time to connect naturally
+      const initTimer = setTimeout(() => {
+        if (!socket.connected && !isConnected) {
+          console.log(
+            "📱 Socket not connected after extended wait, trying direct connection..."
+          );
+          // Try direct socket connection first, not HTTP test
+          socket.connect();
+        }
+      }, 8000); // Increased from 3 seconds to 8 seconds
+
+      return () => clearTimeout(initTimer);
+    }
+  }, [isConnected]);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -801,14 +1205,119 @@ function App() {
 
   useEffect(() => {
     const handleConnect = () => {
-      console.log("Socket connected with ID:", socket.id);
+      console.log("📱 Socket connected with ID:", socket.id);
       setMySocketId(socket.id || "");
       setIsConnected(true);
+      setConnectionStatus("connected");
+      setConnectionAttempts(0);
+
+      // Send a test message to ensure connection is working
+      if (isMobileDevice) {
+        socket.emit("ping", { timestamp: Date.now(), mobile: true });
+      }
     };
 
-    const handleDisconnect = () => {
-      console.log("Socket disconnected");
+    const handleDisconnect = (reason: string) => {
+      console.log("📱 Socket disconnected, reason:", reason);
       setIsConnected(false);
+      setConnectionStatus("reconnecting");
+
+      // Different strategies based on disconnect reason
+      let reconnectDelay = 1000;
+      if (reason === "io server disconnect") {
+        // Server disconnected us - try again quickly
+        reconnectDelay = 500;
+      } else if (reason === "transport close" || reason === "transport error") {
+        // Network issue - wait a bit longer for mobile
+        reconnectDelay = isMobileDevice ? 2000 : 1000;
+      }
+
+      setTimeout(() => {
+        if (joined && roomCode && name) {
+          setConnectionAttempts((prev) => prev + 1);
+          attemptReconnection();
+        } else if (!socket.connected) {
+          // Try to reconnect even if not in a room
+          setConnectionAttempts((prev) => prev + 1);
+          if (isMobileDevice) {
+            testConnection();
+          } else {
+            socket.connect();
+          }
+        }
+      }, reconnectDelay);
+    };
+
+    const handleReconnectAttempt = () => {
+      console.log("🔄 Attempting to reconnect...");
+      setConnectionStatus("reconnecting");
+      setConnectionAttempts((prev) => prev + 1);
+    };
+
+    const handleReconnectError = () => {
+      console.log("❌ Reconnection failed");
+      setConnectionStatus("failed");
+    };
+
+    const handleReconnectFailed = () => {
+      console.log("❌ Reconnection attempts exhausted");
+      setConnectionStatus("failed");
+      setIsConnected(false);
+
+      // Force a page reload as last resort for mobile devices
+      if (isMobileDevice && connectionAttempts > 5) {
+        console.log(
+          "📱 Mobile device - forcing page reload after multiple failed attempts"
+        );
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+      }
+    };
+
+    // Handle visibility change (app switching) - critical for mobile
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log("📱 App went to background");
+      } else {
+        console.log("📱 App came to foreground");
+        // Immediately try to reconnect if disconnected (mobile apps often disconnect in background)
+        if (!socket.connected && joined && roomCode && name) {
+          setConnectionStatus("reconnecting");
+          setTimeout(() => attemptReconnection(), 500);
+        }
+      }
+    };
+
+    // Handle page focus (similar to visibility but more reliable on some devices)
+    const handleFocus = () => {
+      console.log("📱 App gained focus");
+      if (!socket.connected && joined && roomCode && name) {
+        setConnectionStatus("reconnecting");
+        setTimeout(() => attemptReconnection(), 500);
+      }
+    };
+
+    const handleBlur = () => {
+      console.log("📱 App lost focus");
+    };
+
+    // Network status monitoring for mobile devices
+    const handleOnline = () => {
+      console.log("📶 Network back online");
+      setNetworkStatus("online");
+      if (!socket.connected) {
+        setConnectionStatus("reconnecting");
+        setTimeout(() => {
+          socket.connect();
+        }, 1000);
+      }
+    };
+
+    const handleOffline = () => {
+      console.log("📵 Network went offline");
+      setNetworkStatus("offline");
+      setConnectionStatus("failed");
     };
 
     const handlePlayerListUpdate = (
@@ -818,10 +1327,13 @@ function App() {
     };
 
     const handleHostId = (hostId: string) => {
-      // Only update hostId if we don't already have a host or if it's the first time
-      // This prevents unauthorized host transfers during gameplay
-      if (!gameStarted) {
+      // Update hostId when we're in lobby or when game is not active
+      // This allows proper host assignment after game ends
+      if (!gameStarted || phase === "lobby") {
         setHostId(hostId);
+        console.log("Host ID updated to:", hostId);
+      } else {
+        console.log("Host ID update ignored during active game:", hostId);
       }
     };
 
@@ -948,7 +1460,11 @@ function App() {
       setRevealedWord(word);
       setPhase("gameOver");
       playSound("/sounds/game-end.mp3");
-      setTimeout(() => resetGameState(), 5000);
+      setTimeout(() => {
+        resetGameState();
+        // Request host confirmation after game reset
+        console.log("Game ended - requesting host confirmation");
+      }, 5000);
     };
 
     const handleResetToLobby = () => {
@@ -1029,6 +1545,7 @@ function App() {
     const handleStartFinalVoting = () => {
       setVotingPhase("finalVoting");
       setHasFinalVoted(false);
+      setFinalVoteChoice(null);
       setFinalVotingCountdown(FINAL_VOTING_DURATION);
       setShowVotingOverlay(true); // Ensure overlay is shown
       // Reset final vote counts
@@ -1053,6 +1570,7 @@ function App() {
       setVotingResults(null);
       setHasVoted(false);
       setHasFinalVoted(false);
+      setFinalVoteChoice(null);
       setShowVotingOverlay(false);
       setSelectedVote("");
       setVotingStarted(false);
@@ -1080,8 +1598,60 @@ function App() {
       // Don't reset isEliminated here - eliminated players stay eliminated
     };
 
+    const handleChatMessage = (message: {
+      id: string;
+      senderId: string;
+      senderName: string;
+      message: string;
+      timestamp: number;
+      isCurrentTurn?: boolean;
+    }) => {
+      setChatMessages((prev) => [...prev, message]);
+    };
+
+    // Turn system event handlers
+    const handlePlayerTurn = (data: {
+      currentPlayerId: string;
+      currentPlayerName: string;
+      turnDuration: number;
+      turnIndex: number;
+      totalPlayers: number;
+    }) => {
+      setCurrentTurnPlayerId(data.currentPlayerId);
+      setCurrentTurnPlayerName(data.currentPlayerName);
+      setTurnDuration(data.turnDuration);
+      setTurnTimeLeft(data.turnDuration);
+      setTurnIndex(data.turnIndex);
+      setTotalPlayers(data.totalPlayers);
+      setIsTurnSystemActive(true);
+
+      console.log(
+        `🎯 It's ${data.currentPlayerName}'s turn to speak (${data.turnIndex}/${data.totalPlayers})`
+      );
+    };
+
+    const handleTurnSystemStopped = () => {
+      setIsTurnSystemActive(false);
+      setCurrentTurnPlayerId(null);
+      setCurrentTurnPlayerName("");
+      setTurnTimeLeft(0);
+      console.log("🛑 Turn system stopped");
+    };
+
+    // Add event listeners for app visibility and focus
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("blur", handleBlur);
+
+    // Add network status listeners for mobile devices
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
+    socket.on("reconnect_attempt", handleReconnectAttempt);
+    socket.on("reconnect_error", handleReconnectError);
+    socket.on("reconnect_failed", handleReconnectFailed);
     socket.on("playerListUpdate", handlePlayerListUpdate);
     socket.on("hostId", handleHostId);
     socket.on("countdown", handleCountdown);
@@ -1093,9 +1663,14 @@ function App() {
     socket.on("startFinalVoting", handleStartFinalVoting);
     socket.on("finalVoteUpdate", handleFinalVoteUpdate);
     socket.on("gameResumes", handleGameResumes);
+    socket.on("chatMessage", handleChatMessage);
+    socket.on("playerTurn", handlePlayerTurn);
+    socket.on("turnSystemStopped", handleTurnSystemStopped);
 
     socket.on("discussionEnded", () => {
       setDiscussionCountdown(null);
+      // Turn system stops when discussion ends
+      setIsTurnSystemActive(false);
     });
 
     socket.on("votingEnded", () => {
@@ -1111,12 +1686,25 @@ function App() {
     // Check initial connection state
     if (socket.connected) {
       setIsConnected(true);
+      setConnectionStatus("connected");
       setMySocketId(socket.id || "");
+    } else {
+      setConnectionStatus("connecting");
     }
 
     return () => {
+      // Remove event listeners
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
+      socket.off("reconnect_attempt", handleReconnectAttempt);
+      socket.off("reconnect_error", handleReconnectError);
+      socket.off("reconnect_failed", handleReconnectFailed);
       socket.off("playerListUpdate", handlePlayerListUpdate);
       socket.off("hostId", handleHostId);
       socket.off("countdown", handleCountdown);
@@ -1130,6 +1718,9 @@ function App() {
       socket.off("startFinalVoting", handleStartFinalVoting);
       socket.off("finalVoteUpdate", handleFinalVoteUpdate);
       socket.off("gameResumes", handleGameResumes);
+      socket.off("chatMessage", handleChatMessage);
+      socket.off("playerTurn", handlePlayerTurn);
+      socket.off("turnSystemStopped", handleTurnSystemStopped);
       socket.off("roleAssigned", handleRoleAssigned);
       socket.off("gameStarted", handleGameStarted);
       socket.off("gameEnded", handleGameEnded);
@@ -1145,7 +1736,44 @@ function App() {
     mySocketId,
     isEliminated,
     allEliminatedPlayers,
+    joined,
+    roomCode,
+    name,
+    attemptReconnection,
+    connectionAttempts,
+    testConnection,
+    phase,
+    resetGameState,
   ]);
+
+  // Connection timeout effect - especially important for mobile
+  useEffect(() => {
+    let connectionTimer: ReturnType<typeof setTimeout> | null = null;
+
+    if (connectionStatus === "connecting" && !isConnected) {
+      // Set a timeout for connection attempts
+      const timeoutDuration = isMobileDevice ? 15000 : 10000; // Longer timeout for mobile
+
+      connectionTimer = setTimeout(() => {
+        if (!isConnected && connectionStatus === "connecting") {
+          console.log("📱 Connection timeout - forcing reconnection strategy");
+          setConnectionStatus("failed");
+
+          // For mobile devices, try a different approach
+          if (isMobileDevice) {
+            console.log("📱 Mobile timeout - trying forced reconnection");
+            setTimeout(() => {
+              testConnection();
+            }, 2000);
+          }
+        }
+      }, timeoutDuration);
+    }
+
+    return () => {
+      if (connectionTimer) clearTimeout(connectionTimer);
+    };
+  }, [connectionStatus, isConnected, testConnection]);
 
   // Final voting countdown effect
   useEffect(() => {
@@ -1166,41 +1794,42 @@ function App() {
     };
   }, [votingPhase, finalVotingCountdown]);
 
-  const resetGameState = () => {
-    setRole(null);
-    setSecretWord("");
-    setImpostorWord("");
-    setPhase("lobby");
-    setGameStarted(false);
-    setImposterName("");
-    setRevealedWord("");
-    setCountdown(null);
-    setDiscussionCountdown(null);
-    setVotingCountdown(null);
-    setCustomWord("");
-    setCustomImposterWord("");
-    setWordSource("category");
-    setHostIsModerator(false); // Reset moderator status
-    setImposterGetsWord(true);
-    // Don't reset discussionTime and votingTime - preserve host's settings for the room
-    // setDiscussionTime(120);
-    // setVotingTime(60);
-    setCategory(Object.keys(categories)[0]);
-    setShowWordOverlay(false);
-    setVotingPhase("none");
-    setVotingResults(null);
-    setHasVoted(false);
-    setHasFinalVoted(false);
-    setShowVotingOverlay(false);
-    setSelectedVote("");
-    setVotingStarted(false);
-    setIsEliminated(false);
-    setAllEliminatedPlayers([]);
-    setFinalVotingCountdown(null);
-    setFinalVoteCounts({ continueVotes: 0, endVotes: 0, totalVoters: 0 });
-    // Don't reset host information when resetting game state
-    // Only reset when leaving the room completely
-  };
+  // Turn timer countdown effect
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (isTurnSystemActive && turnTimeLeft > 0) {
+      timer = setTimeout(() => {
+        setTurnTimeLeft((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isTurnSystemActive, turnTimeLeft]);
+
+  // Wake lock management - activate during gameplay
+  useEffect(() => {
+    if (gameStarted && phase === "game" && !isEliminated) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+  }, [gameStarted, phase, isEliminated, requestWakeLock, releaseWakeLock]);
+
+  // Keep-alive management - start when joined, stop when leaving
+  useEffect(() => {
+    if (joined && roomCode) {
+      startKeepAlive();
+    } else {
+      stopKeepAlive();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      stopKeepAlive();
+      releaseWakeLock();
+    };
+  }, [joined, roomCode, startKeepAlive, stopKeepAlive, releaseWakeLock]);
 
   const createRoom = (e?: React.MouseEvent) => {
     if (e) {
@@ -1248,7 +1877,7 @@ function App() {
       alert("Please enter a name");
       return;
     }
-    if (!roomCode || roomCode.trim() === "") {
+    if (!roomCode || roomCode.trim().replace(/\s/g, "") === "") {
       alert("Please enter a room code");
       return;
     }
@@ -1257,7 +1886,10 @@ function App() {
 
     socket.emit(
       "joinRoom",
-      { name: name.trim(), roomCode: roomCode.trim().toUpperCase() },
+      {
+        name: name.trim(),
+        roomCode: roomCode.trim().toUpperCase().replace(/\s/g, ""),
+      },
       (res: {
         error?: string;
         players: { id: string; name: string }[];
@@ -1266,6 +1898,7 @@ function App() {
       }) => {
         if (res.error) {
           alert(res.error);
+          setRoomCode(""); // Clear the room code input field on error
           return;
         }
         console.log("Joined room:", res); // Debug log
@@ -1288,6 +1921,8 @@ function App() {
       return;
     }
 
+    setIsStartingGame(true);
+
     const gameConfig = {
       roomCode,
       category,
@@ -1303,6 +1938,7 @@ function App() {
     console.log("🔍 Current wordSource before sending:", wordSource);
 
     socket.emit("startGame", gameConfig, (res: { error?: string }) => {
+      setIsStartingGame(false);
       if (res?.error) alert(res.error);
     });
   };
@@ -1316,6 +1952,11 @@ function App() {
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
+    setToastMessage("Copied to clipboard!");
+    setShowToast(true);
+    setTimeout(() => {
+      setShowToast(false);
+    }, 2000);
   };
 
   const submitVote = (votedPlayerId: string) => {
@@ -1346,6 +1987,23 @@ function App() {
           alert(res.error);
         } else {
           setHasFinalVoted(true);
+          setFinalVoteChoice(continueGame);
+        }
+      }
+    );
+  };
+
+  const sendChatMessage = () => {
+    if (!roomCode || !currentMessage.trim() || isEliminated) return;
+
+    socket.emit(
+      "sendChatMessage",
+      { roomCode, message: currentMessage.trim() },
+      (res: { error?: string; success?: boolean }) => {
+        if (res?.error) {
+          alert(res.error);
+        } else {
+          setCurrentMessage("");
         }
       }
     );
@@ -1598,41 +2256,26 @@ function App() {
             <h2>📊 Voting Results</h2>
             <div className="voting-results">
               {Object.entries(votingResults.results).map(
-                ([playerId, result]) => (
-                  <div key={playerId} className="vote-result">
-                    <span className="player-name">{result.name}</span>
-                    <span className="vote-count">{result.votes} votes</span>
-                  </div>
-                )
+                ([playerId, result]) => {
+                  const isEliminated = votingResults.eliminatedPlayers.some(
+                    (eliminated) => eliminated.id === playerId
+                  );
+                  return (
+                    <div
+                      key={playerId}
+                      className={`vote-result ${
+                        isEliminated ? "eliminated-highlight" : ""
+                      }`}
+                    >
+                      <span className="player-name">{result.name}</span>
+                      <span className="vote-count">{result.votes} votes</span>
+                    </div>
+                  );
+                }
               )}
             </div>
 
-            {votingResults.eliminatedPlayers.length > 1 ? (
-              <div className="eliminated-players">
-                <h3>
-                  🤝 Tie - Multiple Players with {votingResults.maxVotes} votes
-                  each:
-                </h3>
-                {votingResults.eliminatedPlayers.map(
-                  (player: { id: string; name: string }) => (
-                    <div key={player.id} className="eliminated-player">
-                      {player.name}
-                    </div>
-                  )
-                )}
-              </div>
-            ) : votingResults.eliminatedPlayers.length === 1 ? (
-              <div className="eliminated-players">
-                <h3>Most Voted:</h3>
-                {votingResults.eliminatedPlayers.map(
-                  (player: { id: string; name: string }) => (
-                    <div key={player.id} className="eliminated-player">
-                      {player.name}
-                    </div>
-                  )
-                )}
-              </div>
-            ) : (
+            {votingResults.eliminatedPlayers.length === 0 && (
               <p>No one was eliminated (no votes cast)</p>
             )}
           </div>
@@ -1666,7 +2309,9 @@ function App() {
               s
             </div>
 
-            {/* Live vote counts */}
+            <p>Do you think the imposter was voted out? Click to vote:</p>
+
+            {/* Interactive vote counts as buttons */}
             <div
               className="final-vote-counts"
               style={{
@@ -1674,54 +2319,37 @@ function App() {
                 gap: "1rem",
                 justifyContent: "center",
                 marginBottom: "1rem",
-                fontSize: "0.9rem",
+                fontSize: "1rem",
               }}
             >
-              <div
-                style={{
-                  background: "rgba(76, 175, 80, 0.2)",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid var(--success)",
-                }}
-              >
-                <div style={{ color: "var(--success)", fontWeight: 600 }}>
-                  👍 Continue: {finalVoteCounts.continueVotes}
-                </div>
-              </div>
-              <div
-                style={{
-                  background: "rgba(255, 77, 77, 0.2)",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid var(--accent-red)",
-                }}
-              >
-                <div style={{ color: "var(--accent-red)", fontWeight: 600 }}>
-                  👎 End: {finalVoteCounts.endVotes}
-                </div>
-              </div>
-              <div
-                style={{
-                  background: "rgba(255, 255, 255, 0.1)",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "0.5rem",
-                }}
-              >
-                <div
-                  style={{ color: "var(--text-secondary)", fontWeight: 600 }}
-                >
-                  Total: {finalVoteCounts.totalVoters}
-                </div>
-              </div>
-            </div>
-
-            <p>Do you think the imposter was voted out?</p>
-            <div className="final-voting-buttons">
               <button
-                className={`final-vote-button continue ${
+                className={`final-vote-counter-button continue ${
                   hasFinalVoted || isEliminated || isModerator ? "disabled" : ""
                 }`}
+                style={{
+                  background:
+                    hasFinalVoted && finalVoteChoice === true
+                      ? "rgba(76, 175, 80, 0.4)"
+                      : "rgba(76, 175, 80, 0.2)",
+                  padding: "1rem 1.5rem",
+                  borderRadius: "0.8rem",
+                  border:
+                    hasFinalVoted && finalVoteChoice === true
+                      ? "2px solid var(--success)"
+                      : "1px solid var(--success)",
+                  cursor:
+                    hasFinalVoted || isEliminated || isModerator
+                      ? "not-allowed"
+                      : "pointer",
+                  transition: "all 0.2s ease",
+                  fontSize: "1rem",
+                  fontWeight: 600,
+                  color: "var(--success)",
+                  opacity:
+                    hasFinalVoted || isEliminated || isModerator ? 0.6 : 1,
+                  minWidth: "140px",
+                  textAlign: "center",
+                }}
                 onClick={() =>
                   !hasFinalVoted &&
                   !isEliminated &&
@@ -1730,14 +2358,43 @@ function App() {
                 }
                 disabled={hasFinalVoted || isEliminated || isModerator}
               >
-                👍 Continue Game
-                <br />
-                <small>The imposter is still among us</small>
+                <div>👍 Continue</div>
+                <div style={{ fontSize: "1.2rem", margin: "0.5rem 0" }}>
+                  {finalVoteCounts.continueVotes}
+                </div>
+                <div style={{ fontSize: "0.8rem", opacity: 0.8 }}>
+                  Imposter still here
+                </div>
               </button>
+
               <button
-                className={`final-vote-button end ${
+                className={`final-vote-counter-button end ${
                   hasFinalVoted || isEliminated || isModerator ? "disabled" : ""
                 }`}
+                style={{
+                  background:
+                    hasFinalVoted && finalVoteChoice === false
+                      ? "rgba(255, 77, 77, 0.4)"
+                      : "rgba(255, 77, 77, 0.2)",
+                  padding: "1rem 1.5rem",
+                  borderRadius: "0.8rem",
+                  border:
+                    hasFinalVoted && finalVoteChoice === false
+                      ? "2px solid var(--accent-red)"
+                      : "1px solid var(--accent-red)",
+                  cursor:
+                    hasFinalVoted || isEliminated || isModerator
+                      ? "not-allowed"
+                      : "pointer",
+                  transition: "all 0.2s ease",
+                  fontSize: "1rem",
+                  fontWeight: 600,
+                  color: "var(--accent-red)",
+                  opacity:
+                    hasFinalVoted || isEliminated || isModerator ? 0.6 : 1,
+                  minWidth: "140px",
+                  textAlign: "center",
+                }}
                 onClick={() =>
                   !hasFinalVoted &&
                   !isEliminated &&
@@ -1746,10 +2403,48 @@ function App() {
                 }
                 disabled={hasFinalVoted || isEliminated || isModerator}
               >
-                👎 End Game
-                <br />
-                <small>The imposter was voted out</small>
+                <div>� End Game</div>
+                <div style={{ fontSize: "1.2rem", margin: "0.5rem 0" }}>
+                  {finalVoteCounts.endVotes}
+                </div>
+                <div style={{ fontSize: "0.8rem", opacity: 0.8 }}>
+                  Imposter eliminated
+                </div>
               </button>
+
+              <div
+                style={{
+                  background: "rgba(255, 255, 255, 0.1)",
+                  padding: "1rem 1.5rem",
+                  borderRadius: "0.8rem",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  minWidth: "120px",
+                  textAlign: "center",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                }}
+              >
+                <div
+                  style={{
+                    color: "var(--text-secondary)",
+                    fontWeight: 600,
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  Total Voters
+                </div>
+                <div
+                  style={{
+                    fontSize: "1.2rem",
+                    margin: "0.5rem 0",
+                    color: "var(--text-primary)",
+                    fontWeight: 600,
+                  }}
+                >
+                  {finalVoteCounts.totalVoters}
+                </div>
+              </div>
             </div>
 
             {hasFinalVoted && !isEliminated && !isModerator && (
@@ -1785,6 +2480,28 @@ function App() {
 
   return (
     <div className={`app-container ${phase}`}>
+      {/* Toast notification */}
+      {showToast && (
+        <div
+          style={{
+            position: "fixed",
+            top: "20px",
+            right: "20px",
+            background: "rgba(76, 175, 80, 0.9)",
+            color: "white",
+            padding: "12px 20px",
+            borderRadius: "8px",
+            zIndex: 9999,
+            fontSize: "14px",
+            fontWeight: "bold",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+            animation: "slideIn 0.3s ease-out",
+          }}
+        >
+          {toastMessage}
+        </div>
+      )}
+
       <div className="bubbles-container">
         {bubbles.map((bubble, i) => (
           <div
@@ -1823,53 +2540,6 @@ function App() {
       {/* Game over screen shows for everyone regardless of elimination status */}
       {phase === "gameOver" && renderGameOver()}
 
-      {/* Discussion countdown overlay - only show for non-eliminated players */}
-      {!isEliminated && phase === "game" && discussionCountdown !== null && (
-        <div className="countdown-overlay">
-          <div className="countdown-content">
-            <h2>💬 Discussion Time!</h2>
-            <div className="countdown-number">{discussionCountdown}</div>
-            <p>Give clues about your word and listen to others</p>
-            {discussionCountdown <= 10 && (
-              <p
-                style={{
-                  color: "var(--accent-red)",
-                  fontSize: "0.9rem",
-                  marginTop: "0.5rem",
-                }}
-              >
-                Discussion ending soon - voting comes next!
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Voting countdown overlay - only show for non-eliminated players and if voting overlay is not active */}
-      {!isEliminated &&
-        phase === "game" &&
-        votingCountdown !== null &&
-        !showVotingOverlay && (
-          <div className="countdown-overlay">
-            <div className="countdown-content">
-              <h2>🗳️ Voting Time!</h2>
-              <div className="countdown-number">{votingCountdown}</div>
-              <p>Discuss and vote for who you think the imposter is</p>
-              {votingCountdown <= 10 && (
-                <p
-                  style={{
-                    color: "var(--accent-red)",
-                    fontSize: "0.9rem",
-                    marginTop: "0.5rem",
-                  }}
-                >
-                  Time is running out!
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
       <div
         className={`main-content ${
           phase === "lobby" || (phase === "game" && !isEliminated)
@@ -1883,15 +2553,144 @@ function App() {
             {!isConnected && (
               <div
                 style={{
-                  background: "rgba(255, 77, 77, 0.2)",
-                  padding: "0.5rem",
+                  background:
+                    connectionStatus === "failed"
+                      ? "rgba(255, 77, 77, 0.3)"
+                      : "rgba(255, 193, 7, 0.3)",
+                  padding: "0.75rem",
                   borderRadius: "0.5rem",
                   marginBottom: "1rem",
-                  color: "var(--accent-red)",
+                  color:
+                    connectionStatus === "failed"
+                      ? "var(--accent-red)"
+                      : "#ffc107",
                   fontSize: "0.9rem",
+                  border: `1px solid ${
+                    connectionStatus === "failed"
+                      ? "var(--accent-red)"
+                      : "#ffc107"
+                  }`,
                 }}
               >
-                ⚠️ Connecting to server...
+                {connectionStatus === "connecting" && (
+                  <>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "16px",
+                          height: "16px",
+                          border: "2px solid #ffc107",
+                          borderTop: "2px solid transparent",
+                          borderRadius: "50%",
+                          animation: "spin 1s linear infinite",
+                        }}
+                      ></div>
+                      🔄 Connecting to server...
+                    </div>
+                    {isMobileDevice && (
+                      <div style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>
+                        📱 Optimizing for mobile connection...
+                        <br />
+                        Using HTTP polling for better compatibility
+                      </div>
+                    )}
+                  </>
+                )}
+                {connectionStatus === "reconnecting" && (
+                  <>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "16px",
+                          height: "16px",
+                          border: "2px solid #ffc107",
+                          borderTop: "2px solid transparent",
+                          borderRadius: "50%",
+                          animation: "spin 1s linear infinite",
+                        }}
+                      ></div>
+                      🔄 Reconnecting... (Attempt {connectionAttempts})
+                    </div>
+                    <div style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>
+                      Please wait, trying to restore connection
+                    </div>
+                  </>
+                )}
+                {connectionStatus === "failed" && (
+                  <>
+                    ⚠️ Connection failed
+                    <div style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>
+                      {networkStatus === "offline"
+                        ? isMobileDevice
+                          ? "📱 Connection issues detected - please check your WiFi"
+                          : "📵 No internet connection detected"
+                        : "Please check your internet connection and try refreshing the page"}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setConnectionStatus("connecting");
+                        setConnectionAttempts(0);
+                        setNetworkStatus("online"); // Reset network status
+                        if (isMobileDevice) {
+                          console.log(
+                            "📱 Mobile manual reconnection - attempting direct socket connection"
+                          );
+                          // For mobile, try direct socket connection instead of HTTP test
+                          socket.connect();
+                        } else {
+                          socket.connect();
+                        }
+                      }}
+                      style={{
+                        marginTop: "0.5rem",
+                        padding: "0.25rem 0.5rem",
+                        background: "var(--accent-red)",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "0.25rem",
+                        fontSize: "0.8rem",
+                        cursor: "pointer",
+                        marginRight: "0.5rem",
+                      }}
+                      disabled={networkStatus === "offline"}
+                    >
+                      {networkStatus === "offline"
+                        ? "Waiting for network..."
+                        : isMobileDevice
+                        ? "🔄 Retry Mobile Connection"
+                        : "Try Again"}
+                    </button>
+                    {connectionAttempts > 3 && (
+                      <button
+                        onClick={() => window.location.reload()}
+                        style={{
+                          marginTop: "0.5rem",
+                          padding: "0.25rem 0.5rem",
+                          background: "#ffc107",
+                          color: "black",
+                          border: "none",
+                          borderRadius: "0.25rem",
+                          fontSize: "0.8rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        🔄 Refresh Page
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             )}
             <div className="input-group">
@@ -1904,7 +2703,9 @@ function App() {
               <input
                 placeholder="Room Code (leave empty to create)"
                 value={roomCode}
-                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                onChange={(e) =>
+                  setRoomCode(e.target.value.toUpperCase().replace(/\s/g, ""))
+                }
                 className="text-input"
               />
               <div className="button-group">
@@ -1937,107 +2738,274 @@ function App() {
           </div>
         ) : phase === "game" && !showWordOverlay && !isEliminated ? (
           <div className="game-screen">
-            <div className="room-header">
-              <h2>
-                <span className="room-icon">🎮</span>
-                Game in Progress
-              </h2>
-              <p>Room: {roomCode}</p>
-            </div>
-
-            <div className="players-list">
-              <h3>Players</h3>
-              <ul>
-                {players.map((p) => (
-                  <li key={p.id} className={p.id === hostId ? "host" : ""}>
-                    {p.name}
-                    {p.id === hostId && <span className="host-badge">👑</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Show different content based on whether host is participating or not */}
-            {isRoomCreator &&
-            hostId === mySocketId &&
-            hostIsModerator &&
-            !role ? (
-              <div className="host-observer-info">
-                <div
-                  style={{
-                    background: "rgba(255, 77, 77, 0.1)",
-                    border: "2px solid rgba(255, 77, 77, 0.3)",
-                    borderRadius: "1rem",
-                    padding: "1.5rem",
-                    margin: "1rem 0",
-                    textAlign: "center",
-                  }}
-                >
-                  <h3
-                    style={{ color: "var(--accent-red)", marginBottom: "1rem" }}
-                  >
-                    👑 Host Observer Mode
-                  </h3>
-                  <p
-                    style={{
-                      color: "var(--text-secondary)",
-                      marginBottom: "1rem",
-                    }}
-                  >
-                    You are observing the game since you provided the custom
-                    words.
-                  </p>
-                  <div
-                    style={{
-                      background: "rgba(255, 255, 255, 0.05)",
-                      borderRadius: "0.5rem",
-                      padding: "1rem",
-                      marginBottom: "1rem",
-                    }}
-                  >
-                    <p style={{ fontWeight: "600", marginBottom: "0.5rem" }}>
-                      Words in play:
-                    </p>
-                    <p style={{ color: "var(--success)" }}>
-                      Players: {customWord}
-                    </p>
-                    <p style={{ color: "var(--accent-red)" }}>
-                      Imposter: {customImposterWord}
-                    </p>
+            {/* Discussion Phase UI */}
+            {discussionCountdown !== null ? (
+              <div className="discussion-phase">
+                {/* Minimal horizontal info bar */}
+                <div className="game-info-bar">
+                  <div className="countdown-mini">
+                    <span className="countdown-label">⏱️</span>
+                    <span className="countdown-time">
+                      {discussionCountdown}s
+                    </span>
                   </div>
-                  <p
-                    style={{
-                      fontSize: "0.9rem",
-                      color: "var(--text-secondary)",
-                    }}
+                  <div className="role-section">
+                    <span
+                      className={`role-indicator ${
+                        role === "imposter" ? "imposter" : "player"
+                      }`}
+                    >
+                      {role === "imposter" ? "🕵️ IMPOSTER" : "👥 PLAYER"}
+                    </span>
+                  </div>
+                  <div
+                    className={`word-section ${
+                      role === "imposter" ? "imposter" : "player"
+                    }`}
                   >
-                    Watch the players discuss and try to find the imposter!
-                  </p>
+                    <span className="word-label">Word:</span>
+                    <span className="word-value">
+                      {role === "imposter" ? impostorWord || "???" : secretWord}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Full-screen chat overlay */}
+                <div className="chat-overlay">
+                  <div className="chat-overlay-content">
+                    <div className="chat-header">
+                      <h2>💬 Discussion Chat</h2>
+                      <p>Share clues about your word and find the imposter!</p>
+
+                      {/* Turn system indicator */}
+                      {isTurnSystemActive && (
+                        <div className="turn-indicator">
+                          <div className="turn-info">
+                            <span className="current-turn">
+                              {currentTurnPlayerId === mySocketId ? (
+                                <span className="your-turn">🎯 Your Turn!</span>
+                              ) : (
+                                <span className="other-turn">
+                                  🕰️ {currentTurnPlayerName}'s Turn
+                                </span>
+                              )}
+                            </span>
+                            <span className="turn-progress">
+                              ({turnIndex}/{totalPlayers})
+                            </span>
+                          </div>
+                          <div className="turn-timer">
+                            <span className="timer-text">
+                              ⏱️ {turnTimeLeft}s
+                            </span>
+                            <div className="timer-bar">
+                              <div
+                                className="timer-progress"
+                                style={{
+                                  width: `${
+                                    (turnTimeLeft / turnDuration) * 100
+                                  }%`,
+                                  backgroundColor:
+                                    turnTimeLeft <= 5
+                                      ? "#ff4d4d"
+                                      : turnTimeLeft <= 10
+                                      ? "#ffa500"
+                                      : "#4caf50",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="chat-messages-container">
+                      {chatMessages.length === 0 ? (
+                        <div className="chat-empty">
+                          <p>
+                            💬 Start the discussion! Share clues about your
+                            word.
+                          </p>
+                        </div>
+                      ) : (
+                        chatMessages.map((msg) => (
+                          <div
+                            key={msg.id}
+                            className={`chat-message ${
+                              msg.senderId === mySocketId ? "own-message" : ""
+                            }`}
+                          >
+                            <div className="message-header">
+                              <span className="sender-name">
+                                {msg.senderName}
+                              </span>
+                              <span className="message-time">
+                                {new Date(msg.timestamp).toLocaleTimeString(
+                                  [],
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )}
+                              </span>
+                            </div>
+                            <div className="message-content">{msg.message}</div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="chat-input-section">
+                      {isTurnSystemActive &&
+                        currentTurnPlayerId !== mySocketId && (
+                          <div className="waiting-turn-message">
+                            <p>
+                              ⏳ Waiting for {currentTurnPlayerName} to speak...
+                            </p>
+                          </div>
+                        )}
+
+                      <div className="chat-input-container">
+                        <input
+                          type="text"
+                          value={currentMessage}
+                          onChange={(e) => setCurrentMessage(e.target.value)}
+                          placeholder={
+                            isTurnSystemActive &&
+                            currentTurnPlayerId !== mySocketId
+                              ? "Wait for your turn..."
+                              : "Type your message..."
+                          }
+                          maxLength={200}
+                          onKeyPress={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              sendChatMessage();
+                            }
+                          }}
+                          disabled={
+                            isEliminated ||
+                            (isTurnSystemActive &&
+                              currentTurnPlayerId !== mySocketId)
+                          }
+                          className="chat-input"
+                        />
+                        <button
+                          onClick={sendChatMessage}
+                          disabled={
+                            !currentMessage.trim() ||
+                            isEliminated ||
+                            (isTurnSystemActive &&
+                              currentTurnPlayerId !== mySocketId)
+                          }
+                          className="send-button"
+                        >
+                          Send
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            ) : role ? (
-              <div className="game-info">
-                <p
-                  style={{
-                    marginTop: "1rem",
-                    color: "var(--text-secondary)",
-                    textAlign: "center",
-                  }}
-                >
-                  {role === "imposter"
-                    ? impostorWord
-                      ? "🕵️ You are the IMPOSTER! Try to blend in without revealing your different word."
-                      : "🕵️ You are the IMPOSTER! You have no word - listen carefully and try to figure out what everyone is describing!"
-                    : "👥 You are a PLAYER! Describe your word to find the imposter."}
-                </p>
-              </div>
-            ) : null}
+            ) : (
+              /* Non-discussion phases - simpler layout */
+              <div className="simple-game-layout">
+                {/* Voting countdown banner */}
+                {votingCountdown !== null && !showVotingOverlay && (
+                  <div className="countdown-banner">
+                    <div className="countdown-content">
+                      <h3>🗳️ Voting Time!</h3>
+                      <div className="countdown-number">{votingCountdown}</div>
+                      <p>Discuss and vote for who you think the imposter is</p>
+                      {votingCountdown <= 10 && (
+                        <p className="countdown-warning">
+                          Time's running out - cast your vote!
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
-            {isRoomCreator && hostId === mySocketId && (
-              <div className="game-action-buttons">
-                <button onClick={endGame} className="end-button">
-                  End Game
-                </button>
+                <div className="room-header">
+                  <h2>
+                    <span className="room-icon">🎮</span>
+                    Game in Progress
+                  </h2>
+                  <p>Room: {roomCode}</p>
+                </div>
+
+                {/* Show different content based on whether host is participating or not */}
+                {isRoomCreator &&
+                hostId === mySocketId &&
+                hostIsModerator &&
+                !role ? (
+                  <div className="host-observer-info">
+                    <div
+                      style={{
+                        background: "rgba(255, 77, 77, 0.1)",
+                        border: "2px solid rgba(255, 77, 77, 0.3)",
+                        borderRadius: "1rem",
+                        padding: "1.5rem",
+                        margin: "1rem 0",
+                        textAlign: "center",
+                      }}
+                    >
+                      <h3
+                        style={{
+                          color: "var(--accent-red)",
+                          marginBottom: "1rem",
+                        }}
+                      >
+                        👑 Host Observer Mode
+                      </h3>
+                      <p
+                        style={{
+                          color: "var(--text-secondary)",
+                          marginBottom: "1rem",
+                        }}
+                      >
+                        You are observing the game since you provided the custom
+                        words.
+                      </p>
+                      <div
+                        style={{
+                          background: "rgba(255, 255, 255, 0.05)",
+                          borderRadius: "0.5rem",
+                          padding: "1rem",
+                          marginBottom: "1rem",
+                        }}
+                      >
+                        <p
+                          style={{ fontWeight: "600", marginBottom: "0.5rem" }}
+                        >
+                          Words in play:
+                        </p>
+                        <p style={{ color: "var(--success)" }}>
+                          Players: {customWord}
+                        </p>
+                        <p style={{ color: "var(--accent-red)" }}>
+                          Imposter: {customImposterWord}
+                        </p>
+                      </div>
+                      <p
+                        style={{
+                          fontSize: "0.9rem",
+                          color: "var(--text-secondary)",
+                        }}
+                      >
+                        Watch the players discuss and try to find the imposter!
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {isRoomCreator && hostId === mySocketId && (
+                  <div className="game-action-buttons">
+                    <button onClick={endGame} className="end-button">
+                      End Game
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2046,7 +3014,10 @@ function App() {
             <div className="room-header">
               <h2>
                 <span className="room-icon">🏠</span>
-                Room: {roomCode}
+                Room:{" "}
+                <span style={{ fontSize: "24px", fontWeight: "bold" }}>
+                  {roomCode}
+                </span>
                 <button onClick={copyRoomCode} className="copy-button">
                   Copy
                 </button>
@@ -2058,11 +3029,45 @@ function App() {
             </div>
 
             <div className="players-list">
-              <h3>Players</h3>
+              <h3
+                style={{
+                  fontSize: "16px",
+                  fontWeight: "bold",
+                  fontFamily: "sans-serif",
+                  color: "#FFFFFF",
+                }}
+              >
+                Players
+              </h3>
               <ul>
                 {players.map((p) => (
-                  <li key={p.id} className={p.id === hostId ? "host" : ""}>
-                    {p.name}
+                  <li
+                    key={p.id}
+                    className={p.id === hostId ? "host" : ""}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      color: "#FFFFFF",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "20px",
+                        height: "20px",
+                        borderRadius: "50%",
+                        backgroundColor: "#4CAF50",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "10px",
+                        color: "white",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {p.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span style={{ color: "#FFFFFF" }}>{p.name}</span>
                     {p.id === hostId && <span className="host-badge">👑</span>}
                   </li>
                 ))}
@@ -2072,11 +3077,28 @@ function App() {
             {/* Game settings preview for non-host players only */}
             {!(isRoomCreator && hostId === mySocketId) && (
               <div className="game-settings-preview">
-                <h3>Game Settings</h3>
+                <h3
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: "bold",
+                    fontFamily: "sans-serif",
+                    color: "#FFFFFF",
+                  }}
+                >
+                  Game Settings
+                </h3>
                 <div className="settings-grid">
                   <div className="setting-item">
-                    <span className="setting-label">Discussion Time:</span>
-                    <span className="setting-value">
+                    <span
+                      className="setting-label"
+                      style={{ color: "#FFFFFF" }}
+                    >
+                      Discussion Time:
+                    </span>
+                    <span
+                      className="setting-value"
+                      style={{ color: "#FFFFFF" }}
+                    >
                       {typeof discussionTime === "string"
                         ? "120"
                         : discussionTime}{" "}
@@ -2084,8 +3106,16 @@ function App() {
                     </span>
                   </div>
                   <div className="setting-item">
-                    <span className="setting-label">Voting Time:</span>
-                    <span className="setting-value">
+                    <span
+                      className="setting-label"
+                      style={{ color: "#FFFFFF" }}
+                    >
+                      Voting Time:
+                    </span>
+                    <span
+                      className="setting-value"
+                      style={{ color: "#FFFFFF" }}
+                    >
                       {typeof votingTime === "string" ? "60" : votingTime}{" "}
                       seconds
                     </span>
@@ -2098,29 +3128,53 @@ function App() {
               <div className="game-controls">
                 {!gameStarted && (
                   <div className="game-settings">
-                    <h3>Game Settings</h3>
+                    <h3
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "bold",
+                        fontFamily: "sans-serif",
+                        color: "#FFFFFF",
+                      }}
+                    >
+                      Game Settings
+                    </h3>
 
                     <div className="word-source-selector">
-                      <label>
+                      <label
+                        style={{
+                          color: "#FFFFFF",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
                         <input
                           type="radio"
-                          value="category"
-                          checked={wordSource === "category"}
+                          value="random"
+                          checked={wordSource === "random"}
                           onChange={() => {
-                            console.log("📻 Setting wordSource to: category");
-                            setWordSource("category");
-                            setHostIsModerator(false); // Host participates with category words
+                            console.log("📻 Setting wordSource to: random");
+                            setWordSource("random");
+                            setHostIsModerator(false); // Host participates with random words
                             // Broadcast word source change to all players
                             socket.emit("updateWordSource", {
                               roomCode,
-                              wordSource: "category",
+                              wordSource: "random",
                               hostIsModerator: false,
                             });
                           }}
+                          aria-label="Select random word option"
                         />
-                        Category Word
+                        Random Word
                       </label>
-                      <label>
+                      <label
+                        style={{
+                          color: "#FFFFFF",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
                         <input
                           type="radio"
                           value="custom"
@@ -2136,26 +3190,13 @@ function App() {
                               hostIsModerator: true,
                             });
                           }}
+                          aria-label="Select custom word option"
                         />
                         Custom Word
                       </label>
                     </div>
 
-                    {wordSource === "category" && (
-                      <select
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className="category-select"
-                      >
-                        {Object.keys(categories)
-                          .concat("random")
-                          .map((cat) => (
-                            <option key={cat} value={cat}>
-                              {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                            </option>
-                          ))}
-                      </select>
-                    )}
+                    {/* No category selection needed for random words - server chooses */}
 
                     {wordSource === "custom" && (
                       <div className="custom-word-input">
@@ -2164,6 +3205,14 @@ function App() {
                           value={customWord}
                           onChange={(e) => setCustomWord(e.target.value)}
                           placeholder="Enter word for players"
+                          aria-label="Word for players"
+                          style={{
+                            background: "var(--card-bg)",
+                            color: "var(--text-primary)",
+                            border: "1px solid var(--text-secondary)",
+                            borderRadius: "0.25rem",
+                            padding: "0.5rem",
+                          }}
                         />
                         <input
                           type="text"
@@ -2172,6 +3221,14 @@ function App() {
                             setCustomImposterWord(e.target.value)
                           }
                           placeholder="Enter word for imposter"
+                          aria-label="Word for imposter"
+                          style={{
+                            background: "var(--card-bg)",
+                            color: "var(--text-primary)",
+                            border: "1px solid var(--text-secondary)",
+                            borderRadius: "0.25rem",
+                            padding: "0.5rem",
+                          }}
                         />
                       </div>
                     )}
@@ -2183,6 +3240,7 @@ function App() {
                           alignItems: "center",
                           gap: "0.5rem",
                           marginTop: "1rem",
+                          color: "#FFFFFF",
                         }}
                       >
                         <input
@@ -2191,6 +3249,7 @@ function App() {
                           onChange={(e) =>
                             setImposterGetsWord(e.target.checked)
                           }
+                          aria-label="Give imposter a different word"
                         />
                         <span>Give imposter a different word</span>
                       </label>
@@ -2205,12 +3264,23 @@ function App() {
                           marginTop: "1rem",
                         }}
                       >
-                        <span>Discussion time (seconds):</span>
+                        <span
+                          style={{
+                            width: "180px",
+                            textAlign: "left",
+                            color: "#FFFFFF",
+                          }}
+                        >
+                          Discussion time (seconds):
+                        </span>
                         <input
                           type="number"
-                          min="0"
+                          min="10"
+                          max="300"
                           step="30"
                           value={discussionTime}
+                          placeholder="Enter seconds: 10-300"
+                          aria-label="Discussion time in seconds"
                           onChange={(e) => {
                             const value = e.target.value;
                             if (value === "") {
@@ -2252,12 +3322,23 @@ function App() {
                           marginTop: "1rem",
                         }}
                       >
-                        <span>Voting time (seconds):</span>
+                        <span
+                          style={{
+                            width: "180px",
+                            textAlign: "left",
+                            color: "#FFFFFF",
+                          }}
+                        >
+                          Voting time (seconds):
+                        </span>
                         <input
                           type="number"
-                          min="0"
+                          min="10"
+                          max="300"
                           step="10"
                           value={votingTime}
+                          placeholder="Enter seconds: 10-300"
+                          aria-label="Voting time in seconds"
                           onChange={(e) => {
                             const value = e.target.value;
                             if (value === "") {
@@ -2294,11 +3375,52 @@ function App() {
 
                 <div className="game-action-buttons">
                   {!gameStarted ? (
-                    <button onClick={startGame} className="start-button">
+                    <button
+                      onClick={startGame}
+                      className="start-button"
+                      disabled={isStartingGame}
+                      aria-label="Start the game"
+                      style={{
+                        transform: isStartingGame ? "none" : "scale(1)",
+                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                        boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+                        position: "relative",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "8px",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isStartingGame) {
+                          e.currentTarget.style.transform = "scale(1.05)";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isStartingGame) {
+                          e.currentTarget.style.transform = "scale(1)";
+                        }
+                      }}
+                    >
+                      {isStartingGame && (
+                        <div
+                          style={{
+                            width: "20px",
+                            height: "20px",
+                            border: "2px solid #ffffff",
+                            borderTop: "2px solid transparent",
+                            borderRadius: "50%",
+                            animation: "spin 1s linear infinite",
+                          }}
+                        />
+                      )}
                       Start Game
                     </button>
                   ) : (
-                    <button onClick={endGame} className="end-button">
+                    <button
+                      onClick={endGame}
+                      className="end-button"
+                      aria-label="End the game"
+                    >
                       End Game
                     </button>
                   )}

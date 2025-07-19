@@ -1128,6 +1128,12 @@ const getImposterWord = (targetWord) => {
 
 const app = express();
 
+// Your computer's local IP addresses for different networks
+const localIps = [
+  "192.168.100.240", // Your house IP address
+  "192.168.1.10", // Your friend's house IP address
+];
+
 // Configure CORS for production
 const corsOptions = {
   origin: function (origin, callback) {
@@ -1135,6 +1141,7 @@ const corsOptions = {
       "http://localhost:3000",
       "http://localhost:5173",
       "http://localhost:3001",
+      ...localIps.map((ip) => `http://${ip}:5173`), // Allow local network access for mobile testing
       "https://word-imposter-game.vercel.app",
       "https://word-imposter-game-aamosh65s-projects.vercel.app",
       process.env.CLIENT_URL,
@@ -1198,6 +1205,7 @@ const io = new Server(server, {
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:3001",
+        ...localIps.map((ip) => `http://${ip}:5173`), // Allow local network access for mobile testing
         "https://word-imposter-game.vercel.app",
         "https://word-imposter-game-aamosh65s-projects.vercel.app",
         process.env.CLIENT_URL,
@@ -1262,6 +1270,121 @@ function validateHostPermission(socket, room, requireOriginalHost = false) {
   return { valid: true };
 }
 
+// Turn-based chat system functions
+function initializeTurnSystem(roomCode) {
+  const room = rooms[roomCode];
+  if (!room || !room.game) return;
+
+  console.log(`🔄 Initializing turn system for room ${roomCode}`);
+
+  // Get all non-eliminated playing players (exclude host if they're moderating)
+  let activePlayers = room.game.playingPlayers.filter((playerId) => {
+    // Exclude eliminated players
+    const isEliminated = room.game.eliminatedPlayers.some(
+      (eliminated) => eliminated.id === playerId
+    );
+    return !isEliminated;
+  });
+
+  // Shuffle the turn order to make it random and fair
+  activePlayers = shuffleArray([...activePlayers]);
+
+  room.game.turnOrder = activePlayers;
+  room.game.currentTurnIndex = 0;
+  room.game.currentTurnPlayerId = activePlayers[0];
+  room.game.hasPlayerSpoken = {};
+
+  // Start the first turn
+  startPlayerTurn(roomCode);
+}
+
+function shuffleArray(array) {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function startPlayerTurn(roomCode) {
+  const room = rooms[roomCode];
+  if (!room || !room.game || room.game.phase !== "playing") return;
+
+  const currentPlayerId = room.game.currentTurnPlayerId;
+  const currentPlayer = room.players.find((p) => p.id === currentPlayerId);
+
+  if (!currentPlayer) {
+    // Skip this turn if player not found
+    nextTurn(roomCode);
+    return;
+  }
+
+  console.log(`🎯 Starting turn for ${currentPlayer.name} in room ${roomCode}`);
+
+  // Clear any existing turn timer
+  if (room.game.turnTimer) {
+    clearTimeout(room.game.turnTimer);
+  }
+
+  // Notify all players whose turn it is
+  io.to(roomCode).emit("playerTurn", {
+    currentPlayerId: currentPlayerId,
+    currentPlayerName: currentPlayer.name,
+    turnDuration: room.game.turnDuration,
+    turnIndex: room.game.currentTurnIndex + 1,
+    totalPlayers: room.game.turnOrder.length,
+  });
+
+  // Set timer for turn duration
+  room.game.turnTimer = setTimeout(() => {
+    console.log(
+      `⏰ Turn timeout for ${currentPlayer.name} in room ${roomCode}`
+    );
+    nextTurn(roomCode);
+  }, room.game.turnDuration * 1000);
+}
+
+function nextTurn(roomCode) {
+  const room = rooms[roomCode];
+  if (!room || !room.game || room.game.phase !== "playing") return;
+
+  // Clear turn timer
+  if (room.game.turnTimer) {
+    clearTimeout(room.game.turnTimer);
+    room.game.turnTimer = null;
+  }
+
+  // Move to next player
+  room.game.currentTurnIndex =
+    (room.game.currentTurnIndex + 1) % room.game.turnOrder.length;
+  room.game.currentTurnPlayerId =
+    room.game.turnOrder[room.game.currentTurnIndex];
+
+  // Start next turn
+  startPlayerTurn(roomCode);
+}
+
+function stopTurnSystem(roomCode) {
+  const room = rooms[roomCode];
+  if (!room || !room.game) return;
+
+  console.log(`🛑 Stopping turn system for room ${roomCode}`);
+
+  // Clear turn timer
+  if (room.game.turnTimer) {
+    clearTimeout(room.game.turnTimer);
+    room.game.turnTimer = null;
+  }
+
+  // Reset turn system
+  room.game.currentTurnPlayerId = null;
+  room.game.currentTurnIndex = 0;
+
+  // Notify players that turn system stopped
+  io.to(roomCode).emit("turnSystemStopped");
+}
+
 io.on("connection", (socket) => {
   console.log("A user connected:", socket.id);
 
@@ -1323,88 +1446,149 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
 
-    // Find and remove the player from any room they were in
+    // Add a grace period for reconnection during active games
+    const disconnectGracePeriod = 60000; // 60 seconds
+
+    // Find and handle the player disconnect from any room they were in
     for (const roomCode in rooms) {
       const room = rooms[roomCode];
       const playerIndex = room.players.findIndex((p) => p.id === socket.id);
 
       if (playerIndex !== -1) {
         const playerName = room.players[playerIndex].name;
-        room.players.splice(playerIndex, 1);
 
-        if (room.players.length === 0) {
-          // No players left, remove the room
-          delete rooms[roomCode];
-          console.log(`Room ${roomCode} closed (no players left)`);
-        } else {
-          // If host left and there's no active game, assign new host
-          // If there's an active game, only allow host transfer if the original host is available
-          if (socket.id === room.hostId) {
-            if (!room.game) {
-              // No active game - transfer to next player
-              room.hostId = room.players[0].id;
-              io.to(roomCode).emit("hostId", room.hostId);
+        // If there's an active game, mark player as disconnected but don't remove immediately
+        if (room.game) {
+          console.log(
+            `Player ${playerName} disconnected during game in room ${roomCode}. Waiting for reconnection...`
+          );
+
+          // Mark player as disconnected but keep in room for potential reconnection
+          room.players[playerIndex].disconnected = true;
+          room.players[playerIndex].disconnectTime = Date.now();
+
+          // Set timeout to remove player if they don't reconnect
+          setTimeout(() => {
+            const currentPlayer = room.players.find(
+              (p) => p.name === playerName
+            );
+
+            if (currentPlayer && currentPlayer.disconnected) {
               console.log(
-                `New host assigned in room ${roomCode}: ${room.players[0].name}`
-              );
-            } else {
-              // Game is active - only transfer if original host is still available
-              const originalHostPlayer = room.players.find(
-                (p) => p.id === room.originalHostId
-              );
-              if (originalHostPlayer && originalHostPlayer.id !== socket.id) {
-                room.hostId = room.originalHostId;
-                io.to(roomCode).emit("hostId", room.hostId);
-                console.log(
-                  `Original host restored in room ${roomCode}: ${originalHostPlayer.name}`
-                );
-              } else {
-                // Original host is the one leaving - end the game and close room
-                io.to(roomCode).emit("gameEnded", {
-                  reason: "Host left the game",
-                  imposterName: "Game ended",
-                  word: room.game?.targetWord || "Unknown",
-                  hostExcluded: room.game?.hostExcluded || false,
-                });
-                room.game = null;
-                room.hostId = room.players[0].id; // Assign new host for lobby
-                io.to(roomCode).emit("hostId", room.hostId);
-                console.log(
-                  `Game ended due to original host leaving room ${roomCode}`
-                );
-              }
-            }
-          } else if (room.game && room.game.playingPlayers) {
-            // Check if a playing player left during an active game
-            if (room.game.playingPlayers.includes(socket.id)) {
-              // Remove the player from playing players list
-              room.game.playingPlayers = room.game.playingPlayers.filter(
-                (id) => id !== socket.id
+                `Player ${playerName} did not reconnect within grace period. Removing from room ${roomCode}.`
               );
 
-              // If too few playing players remain, end the game
-              if (room.game.playingPlayers.length < 2) {
-                io.to(roomCode).emit("gameEnded", {
-                  reason: "Not enough players remaining",
-                  imposterName: "Game ended",
-                  word: room.game?.targetWord || "Unknown",
-                  hostExcluded: room.game?.hostExcluded || false,
-                });
-                room.game = null;
-                console.log(
-                  `Game ended in room ${roomCode} due to insufficient players`
-                );
+              // Remove the player
+              const currentIndex = room.players.findIndex(
+                (p) => p.name === playerName
+              );
+              if (currentIndex !== -1) {
+                room.players.splice(currentIndex, 1);
               }
-            }
-          }
 
-          io.to(roomCode).emit("playerListUpdate", room.players);
-          console.log(`${playerName} left room ${roomCode}`);
+              // Handle room cleanup and game logic
+              handlePlayerRemoval(roomCode, playerName, socket.id);
+            }
+          }, disconnectGracePeriod);
+        } else {
+          // No active game - remove player immediately
+          room.players.splice(playerIndex, 1);
+          handlePlayerRemoval(roomCode, playerName, socket.id);
         }
+
         break;
       }
     }
   });
+
+  // Helper function to handle player removal logic
+  function handlePlayerRemoval(roomCode, playerName, socketId) {
+    const room = rooms[roomCode];
+    if (!room) return;
+
+    if (room.players.length === 0) {
+      // Clean up any active intervals before removing the room
+      if (room.game) {
+        if (room.game.finalVoteTimeout) {
+          clearTimeout(room.game.finalVoteTimeout);
+        }
+        if (room.game.votingInterval) {
+          clearInterval(room.game.votingInterval);
+        }
+      }
+
+      // No players left, remove the room
+      delete rooms[roomCode];
+      console.log(`Room ${roomCode} closed (no players left)`);
+    } else {
+      // If host left and there's no active game, assign new host
+      // If there's an active game, only allow host transfer if the original host is available
+      if (socketId === room.hostId) {
+        if (!room.game) {
+          // No active game - transfer to next player
+          room.hostId = room.players[0].id;
+          io.to(roomCode).emit("hostId", room.hostId);
+          console.log(
+            `New host assigned in room ${roomCode}: ${room.players[0].name}`
+          );
+        } else {
+          // Game is active - only transfer if original host is still available
+          const originalHostPlayer = room.players.find(
+            (p) => p.id === room.originalHostId
+          );
+          if (originalHostPlayer && originalHostPlayer.id !== socketId) {
+            room.hostId = room.originalHostId;
+            io.to(roomCode).emit("hostId", room.hostId);
+            console.log(
+              `Original host restored in room ${roomCode}: ${originalHostPlayer.name}`
+            );
+          } else {
+            // Original host is the one leaving - end the game and close room
+            io.to(roomCode).emit("gameEnded", {
+              reason: "Host left the game",
+              imposterName: "Game ended",
+              word: room.game?.targetWord || "Unknown",
+              hostExcluded: room.game?.hostExcluded || false,
+            });
+            room.game = null;
+            room.hostId = room.players[0].id; // Assign new host for lobby
+            io.to(roomCode).emit("hostId", room.hostId);
+            console.log(
+              `Game ended due to original host leaving room ${roomCode}`
+            );
+          }
+        }
+      } else if (room.game && room.game.playingPlayers) {
+        // Check if a playing player left during an active game
+        if (room.game.playingPlayers.includes(socketId)) {
+          // Remove the player from playing players list
+          room.game.playingPlayers = room.game.playingPlayers.filter(
+            (id) => id !== socketId
+          );
+
+          // If too few playing players remain, end the game
+          if (room.game.playingPlayers.length < 2) {
+            io.to(roomCode).emit("gameEnded", {
+              reason: "Not enough players remaining",
+              imposterName: "Game ended",
+              word: room.game?.targetWord || "Unknown",
+              hostExcluded: room.game?.hostExcluded || false,
+            });
+            room.game = null;
+
+            // Ensure host is properly maintained after game ends due to player leaving
+            io.to(roomCode).emit("hostId", room.hostId);
+            console.log(
+              `Game ended in room ${roomCode} due to insufficient players, host confirmed as: ${room.hostId}`
+            );
+          }
+        }
+      }
+
+      io.to(roomCode).emit("playerListUpdate", room.players);
+      console.log(`${playerName} left room ${roomCode}`);
+    }
+  }
 
   socket.on(
     "startGame",
@@ -1442,6 +1626,7 @@ io.on("connection", (socket) => {
       let impostorWord;
       let playingPlayers;
       let hostExcluded = false;
+      let selectedCategory = category; // Keep track of the actual category used
 
       if (wordSource === "custom") {
         targetWord = customWord.toLowerCase();
@@ -1459,6 +1644,18 @@ io.on("connection", (socket) => {
               "Need at least 2 players (excluding host) to start a custom word game",
           });
         }
+      } else if (wordSource === "random") {
+        // Randomly select a category and then a word from that category
+        const categoryNames = Object.keys(categories);
+        selectedCategory =
+          categoryNames[Math.floor(Math.random() * categoryNames.length)];
+        const wordList = categories[selectedCategory];
+        targetWord = wordList[Math.floor(Math.random() * wordList.length)];
+        impostorWord = getImposterWord(targetWord);
+        playingPlayers = room.players; // Host can play in random games
+        console.log(
+          `Randomly selected category: ${selectedCategory}, word: ${targetWord}`
+        );
       } else if (category === "random") {
         const allWords = Object.values(categories).flat();
         targetWord = allWords[Math.floor(Math.random() * allWords.length)];
@@ -1482,7 +1679,7 @@ io.on("connection", (socket) => {
       room.game = {
         targetWord,
         impostorWord,
-        category,
+        category: selectedCategory, // Use the actual selected category
         imposterId: playingPlayers[imposterIndex].id,
         hostExcluded: hostExcluded,
         playingPlayers: playingPlayers.map((p) => p.id), // Store IDs of players actually playing
@@ -1493,6 +1690,14 @@ io.on("connection", (socket) => {
         phase: "starting", // Track game phase: starting, playing, voting, finalVoting
         votes: {}, // Store player votes
         finalVotes: {}, // Store final votes (continue/end game)
+        votingInterval: null, // Store voting interval reference for early termination
+        // Turn-based chat system
+        turnOrder: [], // Array of player IDs in turn order
+        currentTurnIndex: 0, // Index of current player's turn
+        currentTurnPlayerId: null, // ID of player whose turn it is
+        turnDuration: 30, // Seconds per turn
+        turnTimer: null, // Timer for current turn
+        hasPlayerSpoken: {}, // Track if players have spoken in current round
       };
 
       let countdown = 5;
@@ -1506,6 +1711,8 @@ io.on("connection", (socket) => {
           clearInterval(countdownInterval);
 
           // Send role assignments only to playing players
+          room.game.roles = {}; // Store roles for reconnection
+
           playingPlayers.forEach((player) => {
             const isImposter = player.id === room.game.imposterId;
             let word;
@@ -1519,6 +1726,13 @@ io.on("connection", (socket) => {
               word = room.game.targetWord;
             }
 
+            // Store role for reconnection
+            room.game.roles[player.id] = {
+              role: isImposter ? "imposter" : "player",
+              word: word,
+              impostorWord: isImposter ? word : undefined,
+            };
+
             io.to(player.id).emit("roleAssigned", {
               role: isImposter ? "imposter" : "player",
               word: word,
@@ -1527,6 +1741,13 @@ io.on("connection", (socket) => {
 
           // If host is excluded, send them a special message
           if (hostExcluded) {
+            // Store host moderator role
+            room.game.roles[room.hostId] = {
+              role: "moderator",
+              targetWord: targetWord,
+              impostorWord: impostorWord,
+            };
+
             io.to(room.hostId).emit("roleAssigned", {
               role: "moderator",
               word: null,
@@ -1548,6 +1769,9 @@ io.on("connection", (socket) => {
               // Set phase to playing when discussion starts
               room.game.phase = "playing";
 
+              // Initialize turn-based chat system
+              initializeTurnSystem(roomCode);
+
               let discussionCountdown = room.game.discussionTime;
               io.to(roomCode).emit("discussionCountdown", {
                 seconds: discussionCountdown,
@@ -1561,6 +1785,8 @@ io.on("connection", (socket) => {
                   });
                 } else {
                   clearInterval(discussionInterval);
+                  // Stop turn system when discussion ends
+                  stopTurnSystem(roomCode);
                   // Discussion time is over - emit "discussionEnded" and start voting
                   io.to(roomCode).emit("discussionEnded");
 
@@ -1576,6 +1802,12 @@ io.on("connection", (socket) => {
                       });
 
                       const votingInterval = setInterval(() => {
+                        const currentRoom = rooms[roomCode];
+                        if (!currentRoom || !currentRoom.game) {
+                          clearInterval(votingInterval);
+                          return;
+                        }
+
                         votingCountdown -= 1;
                         if (votingCountdown > 0) {
                           io.to(roomCode).emit("votingCountdown", {
@@ -1583,10 +1815,15 @@ io.on("connection", (socket) => {
                           });
                         } else {
                           clearInterval(votingInterval);
+                          currentRoom.game.votingInterval = null;
                           // Voting time is over - emit voting results and start final vote
+                          io.to(roomCode).emit("votingEnded");
                           handleVotingResults(roomCode);
                         }
                       }, 1000);
+
+                      // Store the interval reference so it can be cleared if all players vote early
+                      room.game.votingInterval = votingInterval;
                     }
                   }, 1000); // 1 second delay between discussion and voting
                 }
@@ -1660,6 +1897,22 @@ io.on("connection", (socket) => {
 
     // Record the vote (anonymous)
     room.game.votes[socket.id] = votedPlayerId;
+
+    // Check if all players have voted and end voting early if so
+    if (checkAllPlayersVoted(roomCode)) {
+      // Clear the voting interval if it exists
+      if (room.game.votingInterval) {
+        clearInterval(room.game.votingInterval);
+        room.game.votingInterval = null;
+      }
+
+      // Immediately trigger voting results
+      console.log(
+        `🗳️ All players voted in room ${roomCode}, ending voting early`
+      );
+      io.to(roomCode).emit("votingEnded");
+      handleVotingResults(roomCode);
+    }
 
     callback?.({ success: true });
   });
@@ -1740,6 +1993,33 @@ io.on("connection", (socket) => {
 
     callback?.({ success: true });
   });
+
+  // Helper function to check if all players have voted
+  function checkAllPlayersVoted(roomCode) {
+    const room = rooms[roomCode];
+    if (!room || !room.game || !room.game.votes) return false;
+
+    // Get all eligible voters (alive players, excluding eliminated and potentially host)
+    const eligibleVoters = room.players.filter((player) => {
+      // Exclude eliminated players
+      const isEliminated = room.game.eliminatedPlayers.some(
+        (eliminated) => eliminated.id === player.id
+      );
+
+      // Exclude host if hostExcluded is true
+      const isExcludedHost =
+        room.game.hostExcluded && player.id === room.hostId;
+
+      return !isEliminated && !isExcludedHost;
+    });
+
+    // Check if all eligible voters have voted
+    const votersWhoVoted = Object.keys(room.game.votes);
+    return (
+      eligibleVoters.length > 0 &&
+      votersWhoVoted.length >= eligibleVoters.length
+    );
+  }
 
   // Helper function to handle voting results
   function handleVotingResults(roomCode) {
@@ -1905,6 +2185,9 @@ io.on("connection", (socket) => {
       // Start new discussion round
       setTimeout(() => {
         if (room.game) {
+          // Reinitialize turn system for new discussion round
+          initializeTurnSystem(roomCode);
+
           let discussionCountdown = room.game.discussionTime;
           io.to(roomCode).emit("discussionCountdown", {
             seconds: discussionCountdown,
@@ -1930,6 +2213,12 @@ io.on("connection", (socket) => {
                   });
 
                   const votingInterval = setInterval(() => {
+                    const currentRoom = rooms[roomCode];
+                    if (!currentRoom || !currentRoom.game) {
+                      clearInterval(votingInterval);
+                      return;
+                    }
+
                     votingCountdown -= 1;
                     if (votingCountdown > 0) {
                       io.to(roomCode).emit("votingCountdown", {
@@ -1937,9 +2226,14 @@ io.on("connection", (socket) => {
                       });
                     } else {
                       clearInterval(votingInterval);
+                      currentRoom.game.votingInterval = null;
+                      io.to(roomCode).emit("votingEnded");
                       handleVotingResults(roomCode);
                     }
                   }, 1000);
+
+                  // Store the interval reference so it can be cleared if all players vote early
+                  room.game.votingInterval = votingInterval;
                 }
               }, 1000);
             }
@@ -1970,8 +2264,212 @@ io.on("connection", (socket) => {
       });
 
       room.game = null;
+
+      // Ensure host is properly maintained after automatic game end
+      io.to(roomCode).emit("hostId", room.hostId);
+      console.log(
+        `Auto game ended in room ${roomCode}, host confirmed as: ${room.hostId}`
+      );
     }
   }
+
+  // Chat message handler
+  socket.on("sendChatMessage", ({ roomCode, message }, callback) => {
+    const room = rooms[roomCode];
+    if (!room) {
+      return callback?.({ error: "Room not found" });
+    }
+
+    const sender = room.players.find((p) => p.id === socket.id);
+    if (!sender) {
+      return callback?.({ error: "You are not in this room" });
+    }
+
+    // Check if game is active and in discussion phase
+    if (!room.game || room.game.phase !== "playing") {
+      return callback?.({
+        error: "Chat is only available during discussion phase",
+      });
+    }
+
+    // Check if sender is eliminated
+    const isEliminated = room.game.eliminatedPlayers.some(
+      (eliminated) => eliminated.id === socket.id
+    );
+    if (isEliminated) {
+      return callback?.({ error: "You are eliminated and cannot chat" });
+    }
+
+    // Check if it's the player's turn (turn-based system)
+    if (room.game.currentTurnPlayerId !== socket.id) {
+      const currentPlayer = room.players.find(
+        (p) => p.id === room.game.currentTurnPlayerId
+      );
+      const currentPlayerName = currentPlayer ? currentPlayer.name : "Unknown";
+      return callback?.({
+        error: `It's ${currentPlayerName}'s turn to speak. Please wait for your turn.`,
+      });
+    }
+
+    // Validate message
+    if (!message || message.trim() === "") {
+      return callback?.({ error: "Message cannot be empty" });
+    }
+
+    if (message.trim().length > 200) {
+      return callback?.({ error: "Message too long (max 200 characters)" });
+    }
+
+    const chatMessage = {
+      id: `${Date.now()}-${socket.id}`,
+      senderId: socket.id,
+      senderName: sender.name,
+      message: message.trim(),
+      timestamp: Date.now(),
+      isCurrentTurn: true, // Mark this as a turn-based message
+    };
+
+    // Mark that this player has spoken in this turn
+    room.game.hasPlayerSpoken[socket.id] = true;
+
+    // Send to all players in the room
+    io.to(roomCode).emit("chatMessage", chatMessage);
+
+    // Auto-advance to next turn after a short delay (3 seconds)
+    setTimeout(() => {
+      nextTurn(roomCode);
+    }, 3000);
+
+    callback?.({ success: true });
+  });
+
+  // Heartbeat to keep connection alive
+  socket.on("heartbeat", ({ roomCode, timestamp }) => {
+    console.log(
+      `💓 Heartbeat from ${socket.id} in room ${roomCode} at ${timestamp}`
+    );
+    // Update last activity time for the player
+    const room = rooms[roomCode];
+    if (room) {
+      const player = room.players.find((p) => p.id === socket.id);
+      if (player) {
+        player.lastActivity = timestamp;
+      }
+    }
+  });
+
+  // Handle reconnection attempts
+  socket.on("rejoinRoom", ({ roomCode, name }, callback) => {
+    console.log(`🔄 Rejoin attempt: ${name} trying to rejoin ${roomCode}`);
+
+    const room = rooms[roomCode];
+    if (!room) {
+      return callback({ error: "Room not found" });
+    }
+
+    // Check if this player was previously in the room
+    const existingPlayer = room.players.find((p) => p.name === name);
+
+    if (existingPlayer) {
+      // Update their socket ID and rejoin
+      console.log(
+        `✅ Reconnecting existing player ${name} (${existingPlayer.id} -> ${socket.id})`
+      );
+
+      // Clear disconnection status
+      existingPlayer.disconnected = false;
+      delete existingPlayer.disconnectTime;
+
+      // Leave old room if connected to any
+      const oldRooms = Array.from(socket.rooms);
+      oldRooms.forEach((oldRoom) => {
+        if (oldRoom !== socket.id) {
+          socket.leave(oldRoom);
+        }
+      });
+
+      // Update player's socket ID
+      existingPlayer.id = socket.id;
+      existingPlayer.lastActivity = Date.now();
+
+      // Join the room
+      socket.join(roomCode);
+
+      // Prepare game state for restoration
+      let gameState = null;
+      if (room.game) {
+        // Find the role for this player using their old ID first, then by name
+        let playerRole = null;
+
+        // Check if roles are stored with old socket ID
+        if (room.game.roles) {
+          // Look for role by old socket ID first
+          playerRole = Object.values(room.game.roles).find((role, index) => {
+            const playerId = Object.keys(room.game.roles)[index];
+            const player = room.players.find((p) => p.id === playerId);
+            return player && player.name === name;
+          });
+
+          // If found, update the role mapping to new socket ID
+          if (playerRole) {
+            // Remove old mapping
+            const oldId = Object.keys(room.game.roles).find((id) => {
+              const player = room.players.find((p) => p.id === id);
+              return player && player.name === name;
+            });
+
+            if (oldId && oldId !== socket.id) {
+              delete room.game.roles[oldId];
+            }
+
+            // Add new mapping
+            room.game.roles[socket.id] = playerRole;
+          }
+        }
+
+        gameState = {
+          active: true,
+          phase: room.game.phase || "game",
+          playerRole: playerRole,
+          discussionCountdown: room.game.discussionCountdown || null,
+          votingCountdown: room.game.votingCountdown || null,
+        };
+      }
+
+      callback({
+        players: room.players,
+        hostId: room.hostId,
+        gameState: gameState,
+        reconnected: true,
+      });
+
+      // Notify other players of the reconnection
+      io.to(roomCode).emit("playerListUpdate", room.players);
+    } else {
+      // New player trying to join
+      if (room.game) {
+        return callback({ error: "Cannot join room - game is in progress" });
+      }
+
+      // Add as new player
+      room.players.push({
+        id: socket.id,
+        name: name.trim(),
+        lastActivity: Date.now(),
+      });
+
+      socket.join(roomCode);
+      console.log(`${name} joined room ${roomCode}`);
+
+      callback({
+        players: room.players,
+        hostId: room.hostId,
+        reconnected: false,
+      });
+
+      io.to(roomCode).emit("playerListUpdate", room.players);
+    }
+  });
 
   socket.on("endGame", ({ roomCode }, callback) => {
     const room = rooms[roomCode];
@@ -1981,10 +2479,17 @@ io.on("connection", (socket) => {
       return callback?.({ error: validation.error });
     }
 
-    // Clear any existing final vote timeout
-    if (room.game && room.game.finalVoteTimeout) {
-      clearTimeout(room.game.finalVoteTimeout);
-      room.game.finalVoteTimeout = null;
+    // Clear any existing timers and intervals
+    if (room.game) {
+      if (room.game.finalVoteTimeout) {
+        clearTimeout(room.game.finalVoteTimeout);
+        room.game.finalVoteTimeout = null;
+      }
+
+      if (room.game.votingInterval) {
+        clearInterval(room.game.votingInterval);
+        room.game.votingInterval = null;
+      }
     }
 
     // Find the imposter player from all players (not just playing players)
@@ -1999,6 +2504,13 @@ io.on("connection", (socket) => {
     });
 
     room.game = null;
+
+    // Ensure host is properly maintained after game ends
+    io.to(roomCode).emit("hostId", room.hostId);
+    console.log(
+      `Game ended in room ${roomCode}, host confirmed as: ${room.hostId}`
+    );
+
     callback?.({ success: true });
   });
 });
