@@ -1,0 +1,7 @@
+server/
+client/node_modules/
+client/src/
+*.md
+build.bat
+build.sh
+quick-deploy.ps1
