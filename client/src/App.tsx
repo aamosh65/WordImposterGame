@@ -23,6 +23,12 @@ const localIps = [
   "192.168.100.240", // Your house IP address
 ];
 
+// Detect if running on mobile device
+const isMobileDevice =
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
+
 // Function to determine the correct backend URL
 const getBackendUrl = () => {
   const hostname = window.location.hostname;
@@ -49,12 +55,6 @@ const getBackendUrl = () => {
 };
 
 const backendUrl = getBackendUrl();
-
-// Detect if running on mobile device
-const isMobileDevice =
-  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent
-  );
 
 // Debug logging for mobile
 if (isMobileDevice) {
