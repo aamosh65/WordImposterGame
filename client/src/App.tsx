@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import "./App.css";
+import DecryptedText from "./components/DecryptedText";
+import ParticlesBackground from "./components/ParticlesBackground";
 
 // Wake Lock API types
 interface WakeLockSentinel {
@@ -792,7 +794,7 @@ function App() {
   );
   const [votingTime, setVotingTime] = useState<number | string>(60);
   const [votingCountdown, setVotingCountdown] = useState<number | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
+  // Removed unused isMobile state
   const [showWordOverlay, setShowWordOverlay] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
@@ -801,15 +803,6 @@ function App() {
   >("connecting");
   const [networkStatus, setNetworkStatus] = useState<"online" | "offline">(
     "online"
-  );
-  const [bubbles, setBubbles] = useState(
-    Array.from({ length: isMobile ? 10 : 20 }, () => ({
-      top: `${Math.random() * 100}%`,
-      left: `${Math.random() * 100}%`,
-      size: `${10 + Math.random() * 30}px`,
-      delay: `${Math.random() * 15}s`,
-      duration: `${15 + Math.random() * 15}s`,
-    }))
   );
   const [votingPhase, setVotingPhase] = useState<
     "none" | "voting" | "results" | "finalVoting"
@@ -1183,26 +1176,7 @@ function App() {
     }
   }, [isConnected, testConnection]);
 
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
-
-  useEffect(() => {
-    setBubbles(
-      Array.from({ length: isMobile ? 10 : 20 }, () => ({
-        top: `${Math.random() * 100}%`,
-        left: `${Math.random() * 100}%`,
-        size: `${10 + Math.random() * 30}px`,
-        delay: `${Math.random() * 15}s`,
-        duration: `${15 + Math.random() * 15}s`,
-      }))
-    );
-  }, [isMobile]);
+  // Removed unused isMobile effect
 
   const playSound = (soundUrl: string) => {
     try {
@@ -2490,6 +2464,14 @@ function App() {
 
   return (
     <div className={`app-container ${phase}`}>
+      {/* Particles Background */}
+      <ParticlesBackground
+        particleCount={80}
+        colors={["#ff4d4d", "#ffcd07", "#ffffff"]}
+        speed={0.5}
+        size={{ min: 2, max: 4 }}
+      />
+
       {/* Toast notification */}
       {showToast && (
         <div
@@ -2511,23 +2493,6 @@ function App() {
           {toastMessage}
         </div>
       )}
-
-      <div className="bubbles-container">
-        {bubbles.map((bubble, i) => (
-          <div
-            key={i}
-            className="bubble"
-            style={{
-              top: bubble.top,
-              left: bubble.left,
-              width: bubble.size,
-              height: bubble.size,
-              animationDelay: bubble.delay,
-              animationDuration: bubble.duration,
-            }}
-          />
-        ))}
-      </div>
 
       {/* Show elimination overlay for eliminated players throughout the entire game */}
       {isEliminated &&
@@ -2559,7 +2524,13 @@ function App() {
       >
         {!joined ? (
           <div className="join-screen">
-            <h1 className="title">Word Imposter</h1>
+            <h1 className="title">
+              <DecryptedText
+                text="Word Imposter"
+                decryptDuration={1500}
+                pauseDuration={2000}
+              />
+            </h1>
             {!isConnected && (
               <div
                 style={{

@@ -343,6 +343,70 @@ body {
   border-radius: 0.25rem;
 }
 
+/* DecryptedText Animation Styles */
+.decrypted-text {
+  font-family: "Courier New", monospace;
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+.decrypted-text.decrypting {
+  color: var(--warning);
+  text-shadow: 0 0 10px var(--warning), 0 0 20px rgba(255, 193, 7, 0.5),
+    2px 3px 0 rgba(0, 0, 0, 0.3);
+  animation: glitch 0.1s infinite;
+}
+
+.decrypted-text.decrypted {
+  color: var(--accent-red);
+  text-shadow: 2px 3px 0 rgba(0, 0, 0, 0.3);
+  transition: all 0.5s ease;
+}
+
+@keyframes glitch {
+  0% {
+    transform: translate(0);
+  }
+  20% {
+    transform: translate(-1px, 1px);
+  }
+  40% {
+    transform: translate(-1px, -1px);
+  }
+  60% {
+    transform: translate(1px, 1px);
+  }
+  80% {
+    transform: translate(1px, -1px);
+  }
+  100% {
+    transform: translate(0);
+  }
+}
+
+/* Particles Background Styles */
+.particles-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.8;
+}
+
+/* Ensure main content is positioned above particles */
+.main-content {
+  position: relative;
+  z-index: 2;
+}
+
+.app-container {
+  position: relative;
+  z-index: 1;
+}
+
 .input-group {
   display: flex;
   flex-direction: column;
@@ -1058,6 +1122,21 @@ body {
 
   .title {
     font-size: 2rem;
+  }
+
+  /* Mobile adjustments for DecryptedText */
+  .decrypted-text.decrypting {
+    text-shadow: 0 0 8px var(--warning), 0 0 15px rgba(255, 193, 7, 0.4),
+      1px 2px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  .decrypted-text.decrypted {
+    text-shadow: 1px 2px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  /* Mobile adjustments for Particles Background */
+  .particles-background {
+    opacity: 0.4; /* Reduce opacity on mobile for better readability */
   }
 
   .button-group {
