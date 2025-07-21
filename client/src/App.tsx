@@ -2682,7 +2682,7 @@ function App() {
                 className="text-input"
               />
               <input
-                placeholder="Room Code (leave empty to create)"
+                placeholder="Room Code (optional)"
                 value={roomCode}
                 onChange={(e) =>
                   setRoomCode(e.target.value.toUpperCase().replace(/\s/g, ""))
@@ -2696,7 +2696,9 @@ function App() {
                     e.stopPropagation();
                     createRoom(e);
                   }}
-                  className="create-button"
+                  className={`create-button ${name.trim() ? "has-name" : ""} ${
+                    roomCode.trim() ? "secondary-focus" : "primary-focus"
+                  }`}
                   type="button"
                   disabled={!isConnected || !name.trim()}
                 >
@@ -2708,7 +2710,9 @@ function App() {
                     e.stopPropagation();
                     joinRoom(e);
                   }}
-                  className="join-button"
+                  className={`join-button ${
+                    roomCode.trim() ? "has-room-code" : ""
+                  } ${roomCode.trim() ? "primary-focus" : "secondary-focus"}`}
                   type="button"
                   disabled={!isConnected || !name.trim() || !roomCode.trim()}
                 >

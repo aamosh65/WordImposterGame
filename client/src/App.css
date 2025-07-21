@@ -1,3 +1,34 @@
+/* UNIVERSAL BUTTON BORDER REMOVAL - HIGHEST PRIORITY */
+button.create-button,
+button.join-button,
+.create-button,
+.join-button {
+  outline: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  -webkit-focus-ring-color: transparent !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Force remove ALL focus styles universally */
+button.create-button:focus,
+button.join-button:focus,
+button.create-button:active,
+button.join-button:active,
+button.create-button:focus-visible,
+button.join-button:focus-visible,
+.create-button:focus,
+.join-button:focus,
+.create-button:active,
+.join-button:active,
+.create-button:focus-visible,
+.join-button:focus-visible {
+  outline: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  -webkit-focus-ring-color: transparent !important;
+}
+
 #root {
   max-width: 1280px;
   margin: 0 auto;
@@ -121,11 +152,41 @@ select {
 
 /* Prevent buttons from focusing inputs on mobile */
 button {
-  outline: none;
-  -webkit-focus-ring-color: transparent;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
+  outline: none !important;
+  -webkit-focus-ring-color: transparent !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  /* Don't override borders globally - let individual buttons control their borders */
+}
+
+/* Specifically target our buttons to remove blue border */
+.create-button,
+.join-button,
+button.create-button,
+button.join-button {
+  outline: none !important;
+  -webkit-focus-ring-color: transparent !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+}
+
+/* Override any focus states */
+.create-button:focus,
+.join-button:focus,
+button.create-button:focus,
+button.join-button:focus,
+.create-button:active,
+.join-button:active,
+.create-button:focus-visible,
+.join-button:focus-visible {
+  outline: 0 !important;
+  -webkit-focus-ring-color: transparent !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  box-shadow: none !important;
 }
 
 /* Prevent zoom on input focus on iOS */
@@ -422,13 +483,32 @@ body {
   font-size: 1rem;
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
-  transition: var(--transition);
+  transition: all 0.3s ease;
 }
 
+/* ========== ENHANCED INPUT FIELD HOVER & FOCUS STATES ========== */
+
+/* Input Hover State */
+.text-input:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 0 15px rgba(255, 255, 255, 0.1); /* Enhanced glow with white outer glow */
+  transform: translateY(-1px);
+}
+
+/* Input Focus State */
 .text-input:focus {
-  border-color: var(--accent-red);
-  box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.3);
+  border-color: var(--accent-red) !important;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15);
   outline: none;
+  transform: translateY(-2px);
+}
+
+/* Input Active/Typing State */
+.text-input:not(:placeholder-shown) {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .button-group {
@@ -446,7 +526,14 @@ body {
   font-size: 1rem;
   cursor: pointer;
   transition: var(--transition);
-  border: none;
+  /* COMPLETELY remove all browser default borders and outlines */
+  border: none !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  -webkit-focus-ring-color: transparent !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
   /* Mobile touch improvements */
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -464,24 +551,288 @@ body {
   pointer-events: auto;
 }
 
+/* Primary Button - Create Room (Dynamic Focus) */
 .create-button {
-  background: linear-gradient(
-    135deg,
-    var(--accent-red),
-    var(--accent-red-dark)
-  );
-  color: white;
+  background: rgba(229, 75, 75, 0.1); /* Faint red background */
+  color: #e54b4b; /* Red text */
+  border: 2px solid #e54b4b !important; /* Red border - FORCE OVERRIDE */
+  font-size: 1rem; /* Base font size */
+  font-weight: 600; /* Medium weight */
+  flex: 1; /* Equal size by default */
+  /* Specific transitions - NOT 'all' to avoid blue border transitions */
+  transition: background-color 0.3s ease, color 0.3s ease, transform 0.3s ease,
+    box-shadow 0.3s ease, font-size 0.3s ease, font-weight 0.3s ease,
+    flex 0.3s ease;
+  /* COMPREHENSIVE blue border removal */
+  outline: 0 !important;
+  border-style: solid !important;
+  -webkit-focus-ring-color: transparent !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  /* NO SHADOW - completely clean */
+  box-shadow: none !important;
 }
 
-.join-button {
-  background: linear-gradient(135deg, #e53935, #d32f2f);
-  color: white;
+/* Remove ALL focus effects */
+.create-button:focus,
+.create-button:active,
+.create-button:focus-visible {
+  outline: 0 !important;
+  border: 2px solid #e54b4b !important;
+  /* NO GLOW ON FOCUS - completely clean */
+  box-shadow: none !important;
+  -webkit-focus-ring-color: transparent !important;
 }
 
-.create-button:hover,
-.join-button:hover {
+/* Create button when it's the primary focus (no room code entered) */
+.create-button.primary-focus {
+  font-size: 1.1rem; /* Larger text */
+  font-weight: 700; /* Bolder text */
+  flex: 1.1; /* Slightly larger button */
+}
+
+/* Create button when name is entered - filled state */
+.create-button.has-name {
+  background: #e54b4b; /* Fill with vibrant red */
+  color: #ffffff; /* White text for contrast */
+  box-shadow: 0 4px 15px rgba(229, 75, 75, 0.4); /* Enhanced glow for filled state */
+}
+
+/* Enhanced primary focus when filled */
+.create-button.has-name.primary-focus {
+  box-shadow: 0 6px 20px rgba(229, 75, 75, 0.5); /* Stronger glow when primary and filled */
+}
+
+/* ========== ENHANCED BUTTON HOVER & ACTIVE STATES ========== */
+
+/* Create Button Hover States - Only glow when both inputs are empty */
+.create-button:hover {
+  background: rgba(229, 75, 75, 0.2); /* Light red background on hover */
+  transform: translateY(-2px); /* Subtle lift effect */
+  border-color: #ff5757 !important; /* Brighter red border */
+}
+
+/* Create Button Hover - Add glow only when both inputs are empty (no classes) */
+.create-button:not(.has-name):not(.primary-focus):hover {
+  box-shadow: 0 6px 20px rgba(229, 75, 75, 0.3), 0 0 25px rgba(229, 75, 75, 0.4); /* Enhanced glow only when empty */
+}
+
+/* Create Button Active/Pressed State */
+.create-button:active {
+  transform: translateY(0px) scale(0.98); /* Pressed down effect */
+  box-shadow: 0 2px 8px rgba(229, 75, 75, 0.4); /* Compressed shadow */
+  background: rgba(
+    229,
+    75,
+    75,
+    0.2
+  ) !important; /* Darker background when pressed */
+}
+
+/* Create Button Filled State Hover */
+.create-button.has-name:hover {
+  background: #d93b3b !important; /* Darker red when already filled */
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 25px rgba(229, 75, 75, 0.5), 0 0 30px rgba(229, 75, 75, 0.6); /* Enhanced glow for filled state with outer glow */
+}
+
+/* Create Button Filled State Active */
+.create-button.has-name:active {
+  background: #c73333 !important; /* Even darker when pressed */
+  transform: translateY(0px) scale(0.98);
+  box-shadow: 0 3px 12px rgba(229, 75, 75, 0.6);
+}
+
+/* Secondary Button - Join Room (Dynamic Focus) */
+.join-button {
+  background: rgba(255, 199, 0, 0.1); /* Faint yellow background */
+  color: #ffc700; /* Golden yellow text */
+  border: 2px solid #ffc700 !important; /* Golden yellow border - FORCE OVERRIDE */
+  font-size: 1rem; /* Base font size */
+  font-weight: 500; /* Base weight */
+  flex: 1; /* Equal size by default */
+  /* Specific transitions - NOT 'all' to avoid blue border transitions */
+  transition: background-color 0.3s ease, color 0.3s ease, transform 0.3s ease,
+    box-shadow 0.3s ease, font-size 0.3s ease, font-weight 0.3s ease,
+    flex 0.3s ease;
+  /* COMPREHENSIVE blue border removal */
+  outline: 0 !important;
+  border-style: solid !important;
+  -webkit-focus-ring-color: transparent !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  /* NO SHADOW - completely clean */
+  box-shadow: none !important;
+}
+
+/* Remove ALL focus effects */
+.join-button:focus,
+.join-button:active,
+.join-button:focus-visible {
+  outline: 0 !important;
+  border: 2px solid #ffc700 !important;
+  /* NO GLOW ON FOCUS - completely clean */
+  box-shadow: none !important;
+  -webkit-focus-ring-color: transparent !important;
+}
+
+/* Join button when it's the primary focus (room code entered) */
+.join-button.primary-focus {
+  font-size: 1.1rem; /* Larger text */
+  font-weight: 600; /* Bolder text */
+  flex: 1.1; /* Slightly larger button */
+}
+
+/* Join button when room code is entered - filled state */
+.join-button.has-room-code {
+  background: #ffc700; /* Fill with golden yellow */
+  color: #121212; /* Dark text for contrast */
+  box-shadow: 0 4px 15px rgba(255, 199, 0, 0.4); /* Enhanced glow for filled state */
+}
+
+/* Enhanced primary focus when filled */
+.join-button.has-room-code.primary-focus {
+  box-shadow: 0 6px 20px rgba(255, 199, 0, 0.5); /* Stronger glow when primary and filled */
+}
+
+/* ========== JOIN BUTTON HOVER & ACTIVE STATES ========== */
+
+/* Join Button Hover States - Only glow when both inputs are empty */
+.join-button:hover {
+  background: rgba(255, 199, 0, 0.2); /* Light yellow background on hover */
+  transform: translateY(-2px); /* Subtle lift effect */
+  border-color: #ffdc3e !important; /* Brighter yellow border */
+}
+
+/* Join Button Hover - Add glow only when both inputs are empty (no classes) */
+.join-button:not(.has-room-code):not(.primary-focus):hover {
+  box-shadow: 0 6px 20px rgba(255, 199, 0, 0.3), 0 0 25px rgba(255, 199, 0, 0.4); /* Enhanced glow only when empty */
+}
+
+/* Join Button Active/Pressed State */
+.join-button:active {
+  transform: translateY(0px) scale(0.98); /* Pressed down effect */
+  box-shadow: 0 2px 8px rgba(255, 199, 0, 0.4); /* Compressed shadow */
+  background: rgba(
+    255,
+    199,
+    0,
+    0.2
+  ) !important; /* Darker background when pressed */
+}
+
+/* Join Button Filled State Hover */
+.join-button.has-room-code:hover {
+  background: #e6b800 !important; /* Darker yellow when already filled */
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 199, 0, 0.5), 0 0 30px rgba(255, 199, 0, 0.6); /* Enhanced glow for filled state with outer glow */
+}
+
+/* Join Button Filled State Active */
+.join-button.has-room-code:active {
+  background: #cc9f00 !important; /* Even darker when pressed */
+  transform: translateY(0px) scale(0.98);
+  box-shadow: 0 3px 12px rgba(255, 199, 0, 0.6);
+}
+
+/* Enhanced hover for primary focus */
+.join-button.primary-focus:hover {
+  box-shadow: 0 8px 20px rgba(255, 199, 0, 0.4), 0 0 25px rgba(255, 199, 0, 0.6); /* Stronger glow when primary with outer glow */
+}
+
+/* Custom focus states (replacing ugly blue border) */
+.create-button:focus {
+  outline: none !important;
+  border: 2px solid #e54b4b !important; /* Keep red border, no blue */
+  box-shadow: 0 0 0 3px rgba(229, 75, 75, 0.3) !important; /* Red focus ring */
+}
+
+.join-button:focus {
+  outline: none !important;
+  border: 2px solid #ffc700 !important; /* Keep yellow border, no blue */
+  box-shadow: 0 0 0 3px rgba(255, 199, 0, 0.3) !important; /* Yellow focus ring */
+}
+
+/* Enhanced focus for filled states */
+.create-button.has-name:focus {
+  outline: none !important;
+  border: 2px solid #e54b4b !important;
+  box-shadow: 0 4px 15px rgba(229, 75, 75, 0.25),
+    0 0 0 3px rgba(229, 75, 75, 0.3) !important;
+}
+
+.join-button.has-room-code:focus {
+  outline: none !important;
+  border: 2px solid #ffc700 !important;
+  box-shadow: 0 4px 15px rgba(255, 199, 0, 0.25),
+    0 0 0 3px rgba(255, 199, 0, 0.3) !important;
+}
+
+/* Override global button focus styles with highest specificity */
+.button-group .create-button:focus,
+.button-group .create-button:focus-visible,
+.button-group .join-button:focus,
+.button-group .join-button:focus-visible {
+  outline: none !important;
+  -webkit-focus-ring-color: transparent !important;
+  border-width: 2px !important;
+  border-style: solid !important;
+}
+
+.button-group .create-button:focus,
+.button-group .create-button:focus-visible {
+  border-color: #e54b4b !important;
+  box-shadow: 0 0 0 3px rgba(229, 75, 75, 0.3) !important;
+}
+
+.button-group .join-button:focus,
+.button-group .join-button:focus-visible {
+  border-color: #ffc700 !important;
+  box-shadow: 0 0 0 3px rgba(255, 199, 0, 0.3) !important;
+}
+
+/* Override for filled states */
+.button-group .create-button.has-name:focus,
+.button-group .create-button.has-name:focus-visible {
+  border-color: #e54b4b !important;
+  box-shadow: 0 4px 15px rgba(229, 75, 75, 0.25),
+    0 0 0 3px rgba(229, 75, 75, 0.3) !important;
+}
+
+.button-group .join-button.has-room-code:focus,
+.button-group .join-button.has-room-code:focus-visible {
+  border-color: #ffc700 !important;
+  box-shadow: 0 4px 15px rgba(255, 199, 0, 0.25),
+    0 0 0 3px rgba(255, 199, 0, 0.3) !important;
+}
+
+/* Nuclear option - completely eliminate any blue focus rings */
+.create-button,
+.create-button:focus,
+.create-button:focus-visible,
+.create-button:active,
+.join-button,
+.join-button:focus,
+.join-button:focus-visible,
+.join-button:active {
+  outline: none !important;
+  -webkit-focus-ring-color: transparent !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Ensure our custom focus styles still work */
+.create-button:focus,
+.create-button:focus-visible {
+  border: 2px solid #e54b4b !important;
+  box-shadow: 0 0 0 3px rgba(229, 75, 75, 0.3) !important;
+}
+
+.join-button:focus,
+.join-button:focus-visible {
+  border: 2px solid #ffc700 !important;
+  box-shadow: 0 0 0 3px rgba(255, 199, 0, 0.3) !important;
 }
 
 .create-button:disabled,
@@ -576,7 +927,7 @@ body {
 
 .copy-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 77, 77, 0.4);
+  box-shadow: 0 4px 12px rgba(255, 77, 77, 0.4), 0 0 20px rgba(255, 77, 77, 0.5); /* Enhanced glow with outer glow */
 }
 
 .players-list {
@@ -844,7 +1195,7 @@ body {
 .start-button:hover,
 .end-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2), 0 0 25px rgba(255, 77, 77, 0.4); /* Enhanced glow with red outer glow */
 }
 
 /* Game Screen */
@@ -1048,7 +1399,7 @@ body {
 
 .return-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(255, 77, 77, 0.4);
+  box-shadow: 0 6px 16px rgba(255, 77, 77, 0.4), 0 0 25px rgba(255, 77, 77, 0.5); /* Enhanced glow with outer glow */
 }
 
 .loading-overlay {
@@ -2375,12 +2726,22 @@ body {
   color: var(--text-primary);
   font-size: 1rem;
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: all 0.3s ease;
 }
 
+/* Enhanced Chat Input Hover State */
+.chat-input:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 0 15px rgba(255, 255, 255, 0.1); /* Enhanced glow with white outer glow */
+}
+
+/* Enhanced Chat Input Focus State */
 .chat-input:focus {
   border-color: var(--accent-red);
-  box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.2), 0 2px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
 }
 
 .send-button {
@@ -2659,4 +3020,73 @@ body {
     white-space: nowrap;
     overflow: hidden;
   }
+}
+
+/* ========== ENHANCED VISUAL FEEDBACK FOR ALL INTERACTIVE ELEMENTS ========== */
+
+/* Custom Word Input Enhanced Hover States */
+.custom-word-input input:hover {
+  border-color: rgba(255, 77, 77, 0.7) !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 2px 8px rgba(255, 77, 77, 0.1), 0 0 15px rgba(255, 77, 77, 0.2); /* Enhanced glow with red outer glow */
+  transform: translateY(-1px);
+}
+
+/* Category Select Enhanced Hover */
+.category-select:hover {
+  border-color: rgba(255, 77, 77, 0.7) !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 2px 8px rgba(255, 77, 77, 0.1), 0 0 15px rgba(255, 77, 77, 0.2); /* Enhanced glow with red outer glow */
+}
+
+/* Enhanced Focus States for Custom Inputs */
+.category-select:focus,
+.custom-word-input input:focus {
+  background: rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.2),
+    0 4px 12px rgba(255, 77, 77, 0.15) !important;
+  transform: translateY(-2px);
+}
+
+/* Enhanced Button States for Other Game Buttons */
+.start-button:hover,
+.end-button:hover,
+.copy-button:hover,
+.return-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2), 0 0 25px rgba(255, 77, 77, 0.4); /* Enhanced glow with red outer glow */
+}
+
+.start-button:active,
+.end-button:active,
+.copy-button:active,
+.return-button:active {
+  transform: translateY(0px) scale(0.98);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Enhanced Vote Button States */
+.vote-button:hover:not(.disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1),
+    0 0 20px rgba(255, 255, 255, 0.2); /* Enhanced glow with white outer glow */
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.vote-button:active:not(.disabled) {
+  transform: translateY(0px) scale(0.98);
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+}
+
+/* Enhanced Send Button States */
+.send-button:hover {
+  background: rgba(77, 182, 172, 0.3) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(77, 182, 172, 0.2),
+    0 0 15px rgba(77, 182, 172, 0.3); /* Enhanced glow with teal outer glow */
+}
+
+.send-button:active {
+  transform: translateY(0px) scale(0.98);
+  box-shadow: 0 1px 5px rgba(77, 182, 172, 0.2);
 }
