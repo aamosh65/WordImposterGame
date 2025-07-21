@@ -2403,7 +2403,7 @@ function App() {
                 }
                 disabled={hasFinalVoted || isEliminated || isModerator}
               >
-                <div>� End Game</div>
+                <div>🔚 End Game</div>
                 <div style={{ fontSize: "1.2rem", margin: "0.5rem 0" }}>
                   {finalVoteCounts.endVotes}
                 </div>
