@@ -33,6 +33,7 @@ const isMobileDevice =
 const getBackendUrl = () => {
   const hostname = window.location.hostname;
 
+  // Local development
   if (hostname === "localhost") {
     return "http://localhost:3001";
   }
@@ -42,15 +43,12 @@ const getBackendUrl = () => {
     return `http://${hostname}:3001`;
   }
 
-  // For mobile devices or when accessing via IP, use the first IP (current location)
-  if (
-    isMobileDevice ||
-    localIps.some((ip) => hostname.includes(ip.split(".")[0]))
-  ) {
+  // Check if accessing via local network (but not from mobile on public internet)
+  if (localIps.some((ip) => hostname.includes(ip.split(".")[0]))) {
     return `http://${localIps[0]}:3001`;
   }
 
-  // Default to production server
+  // For all other cases (including mobile devices on public internet), use production server
   return "https://wordimpostergame.onrender.com";
 };
 
@@ -64,19 +62,21 @@ if (isMobileDevice) {
 }
 
 const socket: Socket = io(backendUrl, {
-  // Always use polling first for mobile devices to avoid CORS issues
-  transports: isMobileDevice ? ["polling"] : ["websocket", "polling"],
+  // Use polling for mobile devices and allow websocket upgrade for desktop
+  transports: isMobileDevice
+    ? ["polling"] // Mobile: polling only for better compatibility
+    : ["websocket", "polling"], // Desktop: websocket preferred, polling fallback
   autoConnect: true,
   reconnection: true,
-  reconnectionAttempts: 15, // Increased for mobile
-  reconnectionDelay: 500, // Faster initial reconnection for mobile
-  reconnectionDelayMax: 3000, // Lower max delay for mobile
-  timeout: 45000, // Increased timeout for slower mobile connections
+  reconnectionAttempts: isMobileDevice ? 20 : 10, // More attempts for mobile
+  reconnectionDelay: isMobileDevice ? 1000 : 500, // Slower reconnection for mobile networks
+  reconnectionDelayMax: isMobileDevice ? 5000 : 3000, // Higher max delay for mobile
+  timeout: isMobileDevice ? 60000 : 45000, // Longer timeout for mobile connections
   forceNew: false,
   // Mobile-specific options
   upgrade: !isMobileDevice, // Disable upgrade for mobile to stick with polling
   rememberUpgrade: false,
-  // Enable CORS for mobile browsers
+  // CORS and security options
   withCredentials: false,
 });
 
@@ -995,32 +995,28 @@ function App() {
     setConnectionStatus("connecting");
 
     try {
-      // Use the same URL as configured for Socket.IO - don't force HTTPS conversion
-      const testUrl = backendUrl;
-      console.log("📱 Testing HTTP connection to:", testUrl);
+      // Test the health endpoint specifically
+      const testUrl = `${backendUrl}/health`;
+      console.log("📱 Testing connection to health endpoint:", testUrl);
 
       const response = await fetch(testUrl, {
         method: "GET",
         mode: "cors",
         cache: "no-cache",
-        signal: AbortSignal.timeout(10000), // Reduced timeout for faster feedback
+        signal: AbortSignal.timeout(15000), // Longer timeout for mobile networks
       });
 
-      console.log("📱 HTTP test response status:", response.status);
+      console.log("📱 Health check response status:", response.status);
 
-      if (response.ok || response.status === 404 || response.status === 405) {
-        // 404/405 are fine - server is reachable but endpoint doesn't exist
-        console.log("✅ HTTP connection test passed");
+      if (response.ok) {
+        console.log("✅ Server health check passed");
         // Now try to connect via Socket.IO
         if (!socket.connected) {
           console.log("📱 Attempting Socket.IO connection...");
           socket.connect();
         }
       } else {
-        console.log(
-          "❌ HTTP connection test failed with status:",
-          response.status
-        );
+        console.log("❌ Health check failed with status:", response.status);
         setConnectionStatus("failed");
       }
     } catch (error) {
@@ -1154,24 +1150,38 @@ function App() {
 
   // Mobile-specific connection initialization
   useEffect(() => {
+    console.log("📱 Mobile initialization effect running:", {
+      isMobileDevice,
+      isConnected,
+      socketConnected: socket.connected,
+      backendUrl,
+      userAgent: navigator.userAgent,
+    });
+
     if (isMobileDevice && !isConnected) {
       console.log("📱 Initializing mobile connection...");
+      console.log("📱 Current hostname:", window.location.hostname);
+      console.log("📱 Socket instance ID:", socket.id);
 
-      // For mobile devices, wait longer before testing connection
-      // This gives Socket.IO more time to connect naturally
+      // For mobile devices, try immediate connection first
+      if (!socket.connected) {
+        console.log("📱 Attempting immediate mobile connection...");
+        socket.connect();
+      }
+
+      // Fallback: test connection if immediate doesn't work
       const initTimer = setTimeout(() => {
         if (!socket.connected && !isConnected) {
           console.log(
-            "📱 Socket not connected after extended wait, trying direct connection..."
+            "📱 Socket not connected after wait, testing connection..."
           );
-          // Try direct socket connection first, not HTTP test
-          socket.connect();
+          testConnection();
         }
-      }, 8000); // Increased from 3 seconds to 8 seconds
+      }, 5000); // Reduced to 5 seconds for faster feedback
 
       return () => clearTimeout(initTimer);
     }
-  }, [isConnected]);
+  }, [isConnected, testConnection]);
 
   useEffect(() => {
     const checkMobile = () => {
