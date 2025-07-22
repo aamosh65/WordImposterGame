@@ -1,3 +1,6 @@
+/* Import VT323 font for gaming aesthetic */
+@import url("https://fonts.googleapis.com/css2?family=VT323:wght@400&display=swap");
+
 /* UNIVERSAL BUTTON BORDER REMOVAL - HIGHEST PRIORITY */
 button.create-button,
 button.join-button,
@@ -383,11 +386,15 @@ body {
 }
 
 .title {
+  font-family: "VT323", monospace; /* Gaming retro font with monospace fallback */
   color: var(--accent-red);
-  font-weight: 800;
-  font-size: 2.5rem;
+  font-weight: 400; /* VT323 only has normal weight */
+  font-size: 3.5rem; /* Slightly larger since VT323 appears smaller */
   margin-bottom: 1.5rem;
-  text-shadow: 2px 3px 0 rgba(0, 0, 0, 0.3);
+  text-shadow: 0 0 10px rgba(255, 77, 77, 0.5), 0 0 20px rgba(255, 77, 77, 0.3),
+    2px 2px 4px rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.1em; /* Better spacing for readability */
+  line-height: 1.2; /* Improve line height for better readability */
   position: relative;
   display: inline-block;
 }
@@ -406,16 +413,23 @@ body {
 
 /* DecryptedText Animation Styles */
 .decrypted-text {
-  font-family: "Courier New", monospace;
+  font-family: "VT323", monospace; /* Match the title font */
+  font-size: inherit;
   display: inline-block;
-  transition: all 0.3s ease;
+  letter-spacing: 0.1em;
+  transition: color 0.3s ease, text-shadow 0.3s ease;
 }
 
 .decrypted-text.decrypting {
-  color: var(--warning);
-  text-shadow: 0 0 10px var(--warning), 0 0 20px rgba(255, 193, 7, 0.5),
-    2px 3px 0 rgba(0, 0, 0, 0.3);
+  color: #ffcd07; /* Yellow while decrypting */
+  text-shadow: 0 0 15px rgba(255, 205, 7, 0.6), 0 0 30px rgba(255, 205, 7, 0.4);
   animation: glitch 0.1s infinite;
+}
+
+.decrypted-text.decrypted {
+  color: var(--accent-red); /* Red when fully decrypted */
+  text-shadow: 0 0 10px rgba(255, 77, 77, 0.5), 0 0 20px rgba(255, 77, 77, 0.3),
+    2px 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .decrypted-text.decrypted {
@@ -1472,17 +1486,22 @@ body {
   }
 
   .title {
-    font-size: 2rem;
+    font-size: 2.8rem; /* Adjusted for VT323 font size */
+    margin-bottom: 1rem;
+    text-shadow: 0 0 8px rgba(255, 77, 77, 0.4), 0 0 15px rgba(255, 77, 77, 0.2),
+      1px 1px 3px rgba(0, 0, 0, 0.5);
+    letter-spacing: 0.08em; /* Slightly tighter on mobile */
   }
 
   /* Mobile adjustments for DecryptedText */
   .decrypted-text.decrypting {
-    text-shadow: 0 0 8px var(--warning), 0 0 15px rgba(255, 193, 7, 0.4),
-      1px 2px 0 rgba(0, 0, 0, 0.3);
+    text-shadow: 0 0 10px rgba(255, 205, 7, 0.5),
+      0 0 20px rgba(255, 205, 7, 0.3);
   }
 
   .decrypted-text.decrypted {
-    text-shadow: 1px 2px 0 rgba(0, 0, 0, 0.3);
+    text-shadow: 0 0 8px rgba(255, 77, 77, 0.4), 0 0 15px rgba(255, 77, 77, 0.2),
+      1px 1px 3px rgba(0, 0, 0, 0.5);
   }
 
   /* Mobile adjustments for Particles Background */

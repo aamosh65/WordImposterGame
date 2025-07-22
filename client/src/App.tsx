@@ -2527,8 +2527,8 @@ function App() {
             <h1 className="title">
               <DecryptedText
                 text="Word Imposter"
-                decryptDuration={1500}
-                pauseDuration={2000}
+                decryptDuration={3000}
+                pauseDuration={4000}
               />
             </h1>
             {!isConnected && (
