@@ -16,6 +16,18 @@
   );
 }
 
+@media (max-width: 768px) {
+  html,
+  body,
+  .app-container,
+  .main-content {
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+}
+
 /* Ensure body doesn't overlap with browser UI */
 body {
   margin: 0;
@@ -270,12 +282,21 @@ button.join-button:focus-visible,
   box-sizing: border-box;
 }
 
-@media (min-width: 768px) {
-  .app-container {
-    padding: 2rem;
+@media (max-width: 768px) {
+  .room-screen {
+    max-height: none !important;
+    overflow-y: auto !important;
+  }
+  html,
+  body,
+  .app-container,
+  .main-content {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: visible !important;
   }
 }
-
 @media (max-width: 767px) {
   .app-container {
     padding: 0.5rem;
@@ -2249,8 +2270,8 @@ body {
     display: flex;
     flex-direction: column;
     min-height: auto;
-    max-height: 100vh; /* Prevent overflow */
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
   }
 
   .room-header {
