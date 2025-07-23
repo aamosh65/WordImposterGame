@@ -18,13 +18,35 @@
 
 @media (max-width: 768px) {
   html,
-  body,
-  .app-container,
+  body {
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+
+  /* Keep app-container fixed positioning for mobile centering */
+  .app-container {
+    position: fixed !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow-y: auto !important;
+    padding: 0 !important; /* Remove all padding for true centering */
+    margin: 0 !important; /* Remove all margins */
+  }
+
   .main-content {
     height: auto !important;
     min-height: auto !important;
     max-height: none !important;
     overflow-y: visible !important;
+    width: calc(100% - 1rem) !important; /* Account for mobile spacing */
+    max-width: 26rem !important;
+    box-sizing: border-box !important;
   }
 }
 
@@ -196,13 +218,7 @@ button.join-button:focus-visible,
   -webkit-focus-ring-color: transparent !important;
 }
 
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-  background: transparent !important;
-}
+/* Old #root rule removed - replaced with full viewport root above */
 
 .logo {
   height: 6em;
@@ -264,43 +280,18 @@ button.join-button:focus-visible,
 
 /* App.css */
 
-.app-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh; /* Dynamic viewport height - fallback for older browsers */
-  min-width: 100vw;
-  min-height: 100vh;
-  min-height: 100dvh; /* Dynamic viewport height - fallback for older browsers */
-  padding: 1rem;
-  padding-top: 4rem; /* Fixed top padding to avoid browser header overlap */
-  padding-bottom: max(1rem, var(--safe-area-inset-bottom));
-  padding-left: max(1rem, var(--safe-area-inset-left));
-  padding-right: max(1rem, var(--safe-area-inset-right));
-  box-sizing: border-box;
-}
+/* Old duplicate rule removed - replaced with fixed positioning below */
 
 @media (max-width: 768px) {
   .room-screen {
     max-height: none !important;
     overflow-y: auto !important;
   }
-  html,
-  body,
-  .app-container,
-  .main-content {
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow-y: visible !important;
-  }
 }
+
 @media (max-width: 767px) {
   .app-container {
-    padding: 0.5rem;
+    padding: 0 !important; /* Remove padding for true centering */
   }
 }
 
@@ -434,29 +425,34 @@ select {
 html {
   background-color: transparent !important;
   background: transparent !important;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
 }
 
 body {
   background-color: transparent !important; /* Changed from var(--dark-bg) to allow particles to show */
   background: transparent !important;
   color: var(--text-primary);
-  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
   overflow-x: hidden;
   /* Remove touch-action manipulation for better zoom behavior */
 }
 
-/* Ensure full-page zoom and scrolling */
-html {
-  background-color: transparent;
-  height: auto;
-  overflow: auto;
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  /* Remove max-width and centering that interferes with app-container */
 }
 
-body {
-  height: auto;
-  overflow: auto;
-  /* Remove overscroll-behavior for better zoom compatibility */
-}
+/* Duplicate root/html/body styles removed - consolidated above */
 
 /* Animations */
 @keyframes float {
@@ -518,29 +514,45 @@ body {
 
 /* App Container */
 .app-container {
-  width: 100%;
-  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for better mobile support */
+  position: fixed;
+  top: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start; /* Changed from center to flex-start to allow scrolling */
-  padding: 1rem;
-  padding-top: 4rem; /* Fixed top padding for browser header clearance */
-  padding-bottom: 2rem; /* Add bottom padding to ensure content isn't cut off */
+  justify-content: center; /* Center content vertically and horizontally */
+  padding: 0; /* Remove all padding for true centering */
+  margin: 0; /* Remove any margins */
   overflow-x: hidden;
-  overflow-y: visible; /* Allow natural scrolling */
+  overflow-y: auto; /* Allow scrolling when content overflows */
   /* Remove background to allow particles to show through fully */
   background: transparent;
-  min-height: 100vh;
+  /* Ensure it's always centered regardless of zoom */
+  transform-origin: center center;
+  box-sizing: border-box;
 }
 
 /* Remove restrictions from main content */
 .main-content {
+  width: calc(100% - 2rem); /* Account for desired spacing from edges */
+  max-width: 26rem; /* Constrain maximum width */
   height: auto;
+  margin: 0; /* Remove all margins - centering handled by parent */
+  background: var(--card-bg);
+  border-radius: var(--border-radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  padding: 1.5rem;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  transition: var(--transition);
+  /* Ensure it stays centered */
+  flex-shrink: 0; /* Don't shrink in flex container */
   overflow: visible;
-  width: 100%;
-  max-width: 26rem; /* Reduced from 28rem */
-  margin-top: var(--safe-area-inset-top);
+  box-sizing: border-box;
 }
 
 /* Bubbles Background - Fixed for zoom compatibility */
