@@ -40,17 +40,34 @@ const ParticlesBackground: React.FC<ParticlesBackgroundProps> = ({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.log("ParticlesBackground: Canvas not found");
+      return;
+    }
 
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) {
+      console.log("ParticlesBackground: Context not found");
+      return;
+    }
+
+    console.log("ParticlesBackground: Initializing...");
 
     const resizeCanvas = () => {
       const oldWidth = canvas.width || window.innerWidth;
       const oldHeight = canvas.height || window.innerHeight;
 
+      // Always use the full viewport dimensions
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+
+      // Set canvas style to ensure it covers viewport properly
+      canvas.style.width = "100vw";
+      canvas.style.height = "100vh";
+
+      console.log(
+        `ParticlesBackground: Canvas resized to ${canvas.width}x${canvas.height}`
+      );
 
       // Calculate the area ratio to determine if we need more/fewer particles
       const oldArea = oldWidth * oldHeight;
@@ -102,7 +119,7 @@ const ParticlesBackground: React.FC<ParticlesBackgroundProps> = ({
         Math.random() *
           (configRef.current.size.max - configRef.current.size.min) +
         configRef.current.size.min,
-      opacity: Math.random() * 0.8 + 0.2,
+      opacity: Math.random() * 0.6 + 0.6, // Increased opacity from 0.8 + 0.2 to 0.6 + 0.6
       color:
         configRef.current.colors[
           Math.floor(Math.random() * configRef.current.colors.length)
@@ -116,6 +133,9 @@ const ParticlesBackground: React.FC<ParticlesBackgroundProps> = ({
         createParticle
       );
       isInitializedRef.current = true;
+      console.log(
+        `ParticlesBackground: Initialized ${particlesRef.current.length} particles`
+      );
     };
 
     const updateParticle = (particle: Particle) => {
@@ -137,12 +157,17 @@ const ParticlesBackground: React.FC<ParticlesBackgroundProps> = ({
       ctx.save();
       ctx.globalAlpha = particle.opacity;
       ctx.fillStyle = particle.color;
+
+      // Add a stronger glow effect
+      ctx.shadowBlur = particle.size * 3;
+      ctx.shadowColor = particle.color;
+
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
       ctx.fill();
 
-      // Add a subtle glow effect
-      ctx.shadowBlur = particle.size * 2;
+      // Add an additional brighter inner glow
+      ctx.shadowBlur = particle.size * 6;
       ctx.shadowColor = particle.color;
       ctx.fill();
 
@@ -237,8 +262,12 @@ const ParticlesBackground: React.FC<ParticlesBackgroundProps> = ({
         left: 0,
         width: "100vw",
         height: "100vh",
+        minWidth: "100vw",
+        minHeight: "100vh",
         pointerEvents: "none",
-        zIndex: -10,
+        zIndex: -1,
+        display: "block",
+        backgroundColor: "transparent",
       }}
     />
   );
