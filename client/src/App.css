@@ -1,6 +1,158 @@
 /* Import VT323 font for gaming aesthetic */
 @import url("https://fonts.googleapis.com/css2?family=VT323:wght@400&display=swap");
 
+/* Root CSS variables for safe area handling */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0);
+  --safe-area-inset-left: env(safe-area-inset-left, 0);
+  --safe-area-inset-right: env(safe-area-inset-right, 0);
+
+  /* Browser UI compensation */
+  --browser-header-height: 60px; /* Approximate height of browser header */
+  --content-safe-top: max(
+    var(--safe-area-inset-top),
+    var(--browser-header-height)
+  );
+}
+
+/* Ensure body doesn't overlap with browser UI */
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Global Click Spark Animation */
+.click-spark-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+  overflow: hidden;
+}
+
+.spark {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--spark-color, #ff4d4d);
+  pointer-events: none;
+  animation: sparkAnimation 0.6s ease-out forwards;
+  box-shadow: 0 0 4px var(--spark-color, #ff4d4d),
+    0 0 8px var(--spark-color, #ff4d4d);
+}
+
+.spark:nth-child(1) {
+  --angle: 0deg;
+}
+.spark:nth-child(2) {
+  --angle: 45deg;
+}
+.spark:nth-child(3) {
+  --angle: 90deg;
+}
+.spark:nth-child(4) {
+  --angle: 135deg;
+}
+.spark:nth-child(5) {
+  --angle: 180deg;
+}
+.spark:nth-child(6) {
+  --angle: 225deg;
+}
+.spark:nth-child(7) {
+  --angle: 270deg;
+}
+.spark:nth-child(8) {
+  --angle: 315deg;
+}
+
+@keyframes sparkAnimation {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0) scale(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-30px)
+      scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-60px)
+      scale(0);
+    opacity: 0;
+  }
+}
+
+/* Enhanced spark effect for buttons */
+button .spark {
+  background: #ffcd07;
+  box-shadow: 0 0 4px #ffcd07, 0 0 8px #ffcd07, 0 0 12px rgba(255, 205, 7, 0.5);
+}
+
+/* Special spark colors for different button types */
+.start-button .spark {
+  background: #fff;
+  box-shadow: 0 0 4px #fff, 0 0 8px #fff, 0 0 12px rgba(255, 255, 255, 0.5);
+}
+
+.end-button .spark {
+  background: #ff6b6b;
+  box-shadow: 0 0 4px #ff6b6b, 0 0 8px #ff6b6b,
+    0 0 12px rgba(255, 107, 107, 0.5);
+}
+
+.copy-button .spark {
+  background: #4caf50;
+  box-shadow: 0 0 4px #4caf50, 0 0 8px #4caf50, 0 0 12px rgba(76, 175, 80, 0.5);
+}
+
+/* Spark effects for interactive elements */
+.players-list li .spark {
+  background: rgba(255, 77, 77, 0.8);
+  box-shadow: 0 0 4px rgba(255, 77, 77, 0.8), 0 0 8px rgba(255, 77, 77, 0.8);
+}
+
+/* Additional spark effects for specific UI elements */
+.text-input:focus ~ .spark,
+.room-code-display:hover ~ .spark {
+  background: #ffcd07;
+  box-shadow: 0 0 4px #ffcd07, 0 0 8px #ffcd07, 0 0 12px rgba(255, 205, 7, 0.5);
+}
+
+.vote-button .spark {
+  background: #2196f3;
+  box-shadow: 0 0 4px #2196f3, 0 0 8px #2196f3, 0 0 12px rgba(33, 150, 243, 0.5);
+}
+
+.chat-input:focus ~ .spark,
+.send-button .spark {
+  background: #4caf50;
+  box-shadow: 0 0 4px #4caf50, 0 0 8px #4caf50, 0 0 12px rgba(76, 175, 80, 0.5);
+}
+
+/* Global body spark effects */
+body {
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Make sure sparks appear on top of all content */
+.click-spark-container canvas {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  pointer-events: none !important;
+  z-index: 10000 !important;
+}
+
 /* UNIVERSAL BUTTON BORDER REMOVAL - HIGHEST PRIORITY */
 button.create-button,
 button.join-button,
@@ -72,12 +224,14 @@ button.join-button:focus-visible,
 
 @keyframes slideIn {
   from {
-    transform: translateX(100%);
+    transform: translateX(-50%) translateY(-20px);
     opacity: 0;
+    scale: 0.9;
   }
   to {
-    transform: translateX(0);
+    transform: translateX(-50%) translateY(0);
     opacity: 1;
+    scale: 1;
   }
 }
 
@@ -102,11 +256,17 @@ button.join-button:focus-visible,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
-  min-width: 100%;
-  min-height: 100%;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height - fallback for older browsers */
+  min-width: 100vw;
+  min-height: 100vh;
+  min-height: 100dvh; /* Dynamic viewport height - fallback for older browsers */
   padding: 1rem;
+  padding-top: 4rem; /* Fixed top padding to avoid browser header overlap */
+  padding-bottom: max(1rem, var(--safe-area-inset-bottom));
+  padding-left: max(1rem, var(--safe-area-inset-left));
+  padding-right: max(1rem, var(--safe-area-inset-right));
   box-sizing: border-box;
 }
 
@@ -320,16 +480,17 @@ body {
 
 /* App Container */
 .app-container {
-  min-height: 100vh;
   width: 100%;
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start; /* Changed from center to flex-start to allow scrolling */
   padding: 1rem;
+  padding-top: 4rem; /* Fixed top padding for browser header clearance */
+  padding-bottom: 2rem; /* Add bottom padding to ensure content isn't cut off */
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: visible; /* Allow natural scrolling */
 }
 
 /* Remove restrictions from main content */
@@ -337,7 +498,8 @@ body {
   height: auto;
   overflow: visible;
   width: 100%;
-  max-width: 28rem;
+  max-width: 26rem; /* Reduced from 28rem */
+  margin-top: var(--safe-area-inset-top);
 }
 
 /* Bubbles Background - Fixed for zoom compatibility */
@@ -364,15 +526,16 @@ body {
 
 /* Main Content */
 .main-content {
-  margin: 2rem auto;
+  margin: 1.5rem auto; /* Reduced from 2rem */
   background: var(--card-bg);
   border-radius: var(--border-radius);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  padding: 2rem;
+  padding: 1.5rem; /* Reduced from 2rem */
   text-align: center;
   position: relative;
   z-index: 1;
   transition: var(--transition);
+  max-width: 26rem; /* Reduced from 28rem for better viewport usage */
 }
 
 .main-content.blurred {
@@ -389,7 +552,7 @@ body {
   font-family: "VT323", monospace; /* Gaming retro font with monospace fallback */
   color: var(--accent-red);
   font-weight: 400; /* VT323 only has normal weight */
-  font-size: 3.5rem; /* Slightly larger since VT323 appears smaller */
+  font-size: 2.8rem; /* Reduced from 3.5rem to prevent flashing during animation */
   margin-bottom: 1.5rem;
   text-shadow: 0 0 10px rgba(255, 77, 77, 0.5), 0 0 20px rgba(255, 77, 77, 0.3),
     2px 2px 4px rgba(0, 0, 0, 0.5);
@@ -399,7 +562,23 @@ body {
   display: inline-block;
 }
 
-.title::after {
+/* Tagline Styles */
+.tagline {
+  font-family: "VT323", monospace; /* Match the title font */
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  margin-top: -0.5rem; /* Bring closer to title */
+  margin-bottom: 2rem;
+  text-shadow: 0 0 8px rgba(255, 205, 7, 0.3), 1px 1px 2px rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.05em;
+  opacity: 0.9;
+  font-style: italic;
+  line-height: 1.3;
+  position: relative;
+  display: inline-block;
+}
+
+.tagline::after {
   content: "";
   position: absolute;
   bottom: -0.5rem;
@@ -464,10 +643,10 @@ body {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   pointer-events: none;
-  z-index: 0;
+  z-index: -10;
   opacity: 0.8;
 }
 
@@ -898,8 +1077,188 @@ body {
 }
 
 /* Room Screen */
+.room-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1rem auto 2rem auto; /* Reduce top margin, add bottom margin for scrolling */
+  max-width: 90%; /* Limit width for better proportions */
+  padding: 1rem 0; /* Reduce internal padding */
+  width: 100%; /* Ensure full width within max-width */
+}
+
+/* Card-within-a-card containers */
+.room-info-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.players-card {
+  background: rgba(255, 77, 77, 0.05);
+  border: 1px solid rgba(255, 77, 77, 0.15);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(255, 77, 77, 0.1);
+  max-height: 60vh; /* Prevent overflow on mobile */
+  overflow-y: auto; /* Enable scrolling if needed */
+  overflow-x: hidden; /* Prevent horizontal overflow */
+}
+
+.game-settings-card {
+  background: rgba(255, 205, 7, 0.03);
+  border: 1px solid rgba(255, 205, 7, 0.15);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(255, 205, 7, 0.1);
+}
+
 .room-header {
-  margin-bottom: 1.5rem;
+  margin-bottom: 0; /* Remove margin since it's now in a card */
+}
+
+/* New room code emphasis styles */
+.room-code-section {
+  text-align: center;
+  margin-bottom: 0.75rem;
+}
+
+.room-label {
+  display: block;
+  font-family: "Fredoka One", cursive;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.room-code-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.room-code-display {
+  font-family: "VT323", monospace;
+  font-size: 2.2rem;
+  font-weight: bold;
+  color: var(--accent-red);
+  text-shadow: 0 0 10px rgba(255, 77, 77, 0.3);
+  letter-spacing: 0.1em;
+  background: rgba(255, 77, 77, 0.1);
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.5rem;
+  border: 2px solid rgba(255, 77, 77, 0.3);
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.player-count {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-family: "Quicksand", sans-serif;
+  margin: 0;
+  transition: all 0.3s ease;
+}
+
+.player-count.updated {
+  animation: playerCountPulse 0.6s ease-out;
+}
+
+@keyframes playerCountPulse {
+  0% {
+    transform: scale(1);
+    color: var(--text-secondary);
+  }
+  50% {
+    transform: scale(1.05);
+    color: var(--success);
+  }
+  100% {
+    transform: scale(1);
+    color: var(--text-secondary);
+  }
+}
+
+.copy-button {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: linear-gradient(
+    135deg,
+    var(--accent-red),
+    var(--accent-red-dark)
+  );
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: "Quicksand", sans-serif;
+  min-height: 40px;
+  white-space: nowrap;
+  /* Mobile touch improvements */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.copy-icon {
+  font-size: 1rem;
+}
+
+.copy-text {
+  font-size: 0.9rem;
+}
+
+.copy-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 77, 77, 0.4);
+}
+
+.copy-button:active,
+.copy-button:focus {
+  transform: translateY(0);
+  outline: none;
+  /* Mobile feedback */
+  background: linear-gradient(135deg, #e53935, #c62828);
+}
+
+/* Touch feedback for mobile devices */
+.copy-button:active {
+  transform: scale(0.98);
+  transition: transform 0.1s ease;
+}
+
+.copy-button.copied {
+  background: linear-gradient(135deg, #4caf50, #388e3c);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+.copy-button.copied:hover {
+  background: linear-gradient(135deg, #4caf50, #388e3c);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+.copy-button.copied:active {
+  background: linear-gradient(135deg, #43a047, #2e7d32);
 }
 
 .room-header h2 {
@@ -907,7 +1266,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  font-size: 1.5rem;
+  font-size: 1.3rem; /* Reduced from 1.5rem */
   margin-bottom: 0.5rem;
 }
 
@@ -915,8 +1274,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.8rem;
-  height: 1.8rem;
+  width: 1.5rem; /* Reduced from 1.8rem */
+  height: 1.5rem; /* Reduced from 1.8rem */
   border-radius: 50%;
   background: rgba(255, 77, 77, 0.2);
   animation: pulse 2s infinite;
@@ -945,41 +1304,247 @@ body {
 }
 
 .players-list {
-  background: rgba(255, 77, 77, 0.1);
-  border-radius: var(--border-radius);
-  padding: 1rem;
-  margin-bottom: 1.5rem;
-  border: 1px solid rgba(255, 77, 77, 0.2);
+  margin-bottom: 0; /* Remove margin since it's now in a card */
+  padding: 0; /* Remove padding since card provides it */
+  background: none; /* Remove background since card provides it */
+  border: none; /* Remove border since card provides it */
+  border-radius: 0; /* Remove border-radius since card provides it */
+  position: relative; /* For scroll indicator positioning */
+}
+
+/* Scroll indicator - subtle gradient at bottom when scrollable */
+.players-list::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.3));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+
+/* Show scroll indicator when content is scrollable */
+.players-list.scrollable::after {
+  opacity: 1;
 }
 
 .players-list h3 {
   color: var(--warning);
-  margin-bottom: 0.8rem;
+  margin-bottom: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  font-size: 1.1rem;
+  font-family: "Fredoka One", cursive;
 }
 
 .players-list ul {
   list-style: none;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 100%;
+  overflow-x: hidden; /* Prevent horizontal overflow */
+  /* Scrollable container for many players */
+  max-height: 240px; /* Limit height to ~4 players (60px each) */
+  overflow-y: auto; /* Enable vertical scrolling */
+  padding-right: 8px; /* Add space for scrollbar */
+  margin-right: -8px; /* Offset the padding to maintain visual alignment */
+}
+
+/* Custom scrollbar styling for better UX */
+.players-list ul::-webkit-scrollbar {
+  width: 6px;
+}
+
+.players-list ul::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.players-list ul::-webkit-scrollbar-thumb {
+  background: rgba(255, 77, 77, 0.6);
+  border-radius: 3px;
+}
+
+.players-list ul::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 77, 77, 0.8);
+}
+
+/* Firefox scrollbar styling */
+.players-list ul {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 77, 77, 0.6) rgba(255, 255, 255, 0.1);
 }
 
 .players-list li {
-  padding: 0.8rem;
+  padding: 0.75rem 1rem;
   border-radius: 0.8rem;
   background: rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  min-width: 0; /* Allow flex items to shrink */
+  word-wrap: break-word; /* Handle long names */
+  overflow-wrap: break-word; /* Handle long names */
+  margin-bottom: 0.25rem;
+  transform-origin: center;
+  /* No default animation - only animate when specific classes are applied */
+}
+
+/* Animation for existing players to show first */
+@keyframes existingPlayerReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(-15px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Simple dropdown animation for newly joined players */
+@keyframes playerJoinDropdown {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Class for existing players to show first */
+.players-list li.existing-player {
+  animation: existingPlayerReveal 0.4s ease-out;
+  opacity: 0; /* Start invisible */
+  animation-fill-mode: forwards; /* Keep final state */
+}
+
+/* Class for newly joined players - simple dropdown */
+.players-list li.newly-joined {
+  animation: playerJoinDropdown 0.6s ease-out;
   position: relative;
-  overflow: hidden;
-  transition: var(--transition);
+}
+
+/* Staggered animation delays for existing players (faster) */
+.players-list li.existing-player:nth-of-type(1) {
+  animation-delay: 0s;
+}
+.players-list li.existing-player:nth-of-type(2) {
+  animation-delay: 0.1s;
+}
+.players-list li.existing-player:nth-of-type(3) {
+  animation-delay: 0.2s;
+}
+.players-list li.existing-player:nth-of-type(4) {
+  animation-delay: 0.3s;
+}
+.players-list li.existing-player:nth-of-type(5) {
+  animation-delay: 0.4s;
+}
+.players-list li.existing-player:nth-of-type(6) {
+  animation-delay: 0.5s;
+}
+.players-list li.existing-player:nth-of-type(7) {
+  animation-delay: 0.6s;
+}
+.players-list li.existing-player:nth-of-type(8) {
+  animation-delay: 0.7s;
+}
+
+/* Staggered animation delays for newly joined players (start shortly after existing players appear) */
+.players-list li.newly-joined:nth-of-type(1) {
+  animation-delay: 0s;
+}
+.players-list li.newly-joined:nth-of-type(2) {
+  animation-delay: 0.1s;
+}
+.players-list li.newly-joined:nth-of-type(3) {
+  animation-delay: 0.2s;
+}
+.players-list li.newly-joined:nth-of-type(4) {
+  animation-delay: 0.3s;
+}
+.players-list li.newly-joined:nth-of-type(5) {
+  animation-delay: 0.4s;
+}
+.players-list li.newly-joined:nth-of-type(6) {
+  animation-delay: 0.5s;
+}
+.players-list li.newly-joined:nth-of-type(7) {
+  animation-delay: 0.6s;
+}
+.players-list li.newly-joined:nth-of-type(8) {
+  animation-delay: 0.7s;
+}
+
+/* Special animation for the first player in an empty room - Simple fade from above */
+.players-list li.first-player {
+  animation: firstPlayerWelcome 0.6s ease-out;
+}
+
+@keyframes firstPlayerWelcome {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Player leave animation */
+@keyframes playerLeave {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    max-height: 100px;
+    margin-bottom: 0.25rem;
+    padding: 0.75rem 1rem;
+  }
+  50% {
+    opacity: 0.3;
+    transform: translateY(-10px) scale(0.95);
+    max-height: 100px;
+    margin-bottom: 0.25rem;
+    padding: 0.75rem 1rem;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.8);
+    max-height: 0;
+    margin-bottom: 0;
+    padding: 0 1rem;
+  }
+}
+
+/* Class for leaving players - Global for all screens */
+.players-list li.leaving,
+.vote-button.leaving {
+  animation: playerLeave 0.4s ease-in forwards;
+}
+
+.players-list li:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .players-list li.host {
-  background: rgba(229, 57, 53, 0.1);
-  font-weight: 600;
+  background: rgba(255, 215, 0, 0.15);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+.players-list li.host:hover {
+  background: rgba(255, 215, 0, 0.2);
 }
 
 .host-badge {
@@ -999,9 +1564,9 @@ body {
 
 /* Game Settings */
 .game-settings {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px dashed rgba(255, 77, 77, 0.3);
+  margin-top: 0; /* Remove margin since it's now in a card */
+  padding-top: 0; /* Remove padding since card provides it */
+  border-top: none; /* Remove border since we have card separation */
 }
 
 .game-settings h3 {
@@ -1011,6 +1576,8 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  font-family: "Fredoka One", cursive;
+  font-size: 1.1rem;
 }
 
 .word-source-selector {
@@ -1095,39 +1662,71 @@ body {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
+.start-button:not(:disabled):hover {
+  animation: pulseGlowHover 2s ease-in-out infinite;
+  transform: translateY(-2px);
+}
+
+@keyframes pulseGlowHover {
+  0%,
+  100% {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2), 0 0 0 4px rgba(255, 77, 77, 0.2);
+  }
+  50% {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2),
+      0 0 0 12px rgba(255, 77, 77, 0.15), 0 0 30px rgba(255, 77, 77, 0.4);
+  }
+}
+
+.start-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 77, 77, 0.5),
+    rgba(255, 40, 40, 0.5)
+  );
+}
+
+.start-button:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.start-button:not(:disabled) {
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%,
+  100% {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 0 0 rgba(255, 77, 77, 0.4);
+  }
+  50% {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 0 8px rgba(255, 77, 77, 0.1),
+      0 0 20px rgba(255, 77, 77, 0.3);
+  }
+}
+
 /* Game Controls Container */
 .game-controls {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px dashed rgba(255, 77, 77, 0.3);
+  margin-top: 0; /* Remove margin since it's now in a card */
+  padding-top: 0; /* Remove padding since card provides it */
+  border-top: none; /* Remove border since we have card separation */
 }
 
 /* Game Action Buttons Container */
 .game-action-buttons {
   display: flex;
   justify-content: center;
-  margin-top: 1rem;
+  margin-top: 0.8rem;
 }
 
 /* Ensure game settings and action buttons have proper spacing */
 .game-settings + .game-action-buttons {
   margin-top: 1.5rem;
-}
-
-/* Game Settings */
-.game-settings {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px dashed rgba(255, 77, 77, 0.3);
-}
-
-.game-settings h3 {
-  color: var(--accent-red);
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
 }
 
 .word-source-selector {
@@ -1467,30 +2066,62 @@ body {
 
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
+  /* Ensure body and html can scroll properly on mobile */
+  html,
+  body {
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
+    overflow-y: scroll !important; /* Force scroll capability */
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    /* Remove any height constraints */
+    position: relative !important;
+  }
+
   /* Fix app container for mobile scrolling */
   .app-container {
-    min-height: 100vh;
-    height: auto;
+    min-height: auto; /* Remove min-height constraint that can block scrolling */
+    height: auto; /* Allow content to expand beyond viewport */
+    max-height: none; /* Remove any height restrictions */
     justify-content: flex-start;
-    overflow-y: auto;
+    overflow-y: visible; /* Change to visible to allow natural scrolling */
     overflow-x: hidden;
-    padding: 0.5rem;
+    padding: 0.25rem; /* Reduced from 0.5rem */
+    padding-top: 3rem; /* Fixed top padding for mobile to avoid browser header */
+    padding-bottom: 10rem; /* Significantly increase bottom padding for guaranteed scroll space */
+    padding-left: max(0.25rem, var(--safe-area-inset-left));
+    padding-right: max(0.25rem, var(--safe-area-inset-right));
+    /* Ensure scrolling works on mobile */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
   }
 
   .main-content {
-    padding: 1.5rem;
+    padding: 1rem; /* Reduced from 1.5rem */
     max-width: 100%;
-    margin: 1rem auto;
+    margin: 0.5rem auto 2rem auto; /* Add bottom margin to ensure space for scrolling */
     min-height: auto;
-    width: calc(100% - 1rem);
+    width: calc(100% - 0.5rem); /* Adjusted for smaller padding */
+    box-sizing: border-box; /* Ensure proper sizing */
+    /* Ensure content can expand */
+    height: auto;
+    overflow: visible;
   }
 
   .title {
-    font-size: 2.8rem; /* Adjusted for VT323 font size */
+    font-size: 2.2rem; /* Further reduced from 2.8rem for mobile stability */
     margin-bottom: 1rem;
     text-shadow: 0 0 8px rgba(255, 77, 77, 0.4), 0 0 15px rgba(255, 77, 77, 0.2),
       1px 1px 3px rgba(0, 0, 0, 0.5);
     letter-spacing: 0.08em; /* Slightly tighter on mobile */
+  }
+
+  .tagline {
+    font-size: 1rem; /* Smaller on mobile */
+    margin-top: -0.3rem; /* Tighter spacing on mobile */
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.03em; /* Tighter letter spacing */
+    opacity: 0.8; /* Slightly more transparent on mobile */
   }
 
   /* Mobile adjustments for DecryptedText */
@@ -1513,8 +2144,51 @@ body {
     flex-direction: column;
   }
 
+  /* Card-within-a-card mobile adjustments */
+  .room-info-card,
+  .players-card,
+  .game-settings-card {
+    padding: 0.8rem;
+    margin-bottom: 1.5rem; /* Increase bottom margin especially for game-settings-card */
+    border-radius: 0.6rem;
+  }
+
+  /* Specific adjustment for game settings card to ensure start button is accessible */
+  .game-settings-card {
+    margin-bottom: 4rem; /* Significantly increase bottom margin for start button access */
+    padding-bottom: 3rem; /* Significantly increase bottom padding */
+    min-height: auto; /* Ensure no height constraints */
+  }
+
+  .room-screen {
+    gap: 0.8rem;
+    margin: 0.5rem auto 5rem auto; /* Dramatically increase bottom margin for mobile scrolling */
+    max-width: 95%; /* Slightly more width on mobile */
+    padding: 0.5rem 0 4rem 0; /* Significantly increase bottom padding to ensure scroll space */
+    /* Ensure room screen can be scrolled */
+    min-height: auto;
+    height: auto;
+    overflow: visible;
+    /* Remove any constraints that might prevent scrolling */
+    max-height: none;
+  }
+
   .players-list ul {
     grid-template-columns: 1fr;
+    max-height: 200px; /* Slightly shorter on mobile */
+    padding-right: 4px; /* Smaller scrollbar area on mobile */
+    margin-right: -4px;
+  }
+
+  /* Smaller scrollbar on mobile */
+  .players-list ul::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  /* Show scroll indicator more prominently on mobile */
+  .players-list.scrollable::after {
+    height: 15px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.5));
   }
 
   .settings-grid {
@@ -1542,23 +2216,32 @@ body {
     gap: 0.5rem;
   }
 
-  /* Mobile room header and copy button fixes */
-  .room-header h2 {
+  /* Mobile room code emphasis styles */
+  .room-code-display {
+    font-size: 1.8rem;
+    padding: 0.3rem 0.6rem;
+    min-height: 40px;
+  }
+
+  .room-code-container {
     flex-direction: column;
-    align-items: center;
     gap: 0.5rem;
-    font-size: 1.3rem;
   }
 
   .copy-button {
-    margin-left: 0;
-    margin-top: 0.5rem;
-    padding: 0.5rem 1rem;
+    margin: 0;
+    padding: 0.4rem 0.8rem;
     font-size: 0.85rem;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    min-height: 40px;
+    gap: 0.3rem;
+  }
+
+  .copy-icon {
+    font-size: 0.9rem;
+  }
+
+  .copy-text {
+    font-size: 0.85rem;
   }
 
   /* Ensure game controls are always accessible */
@@ -1566,19 +2249,217 @@ body {
     display: flex;
     flex-direction: column;
     min-height: auto;
+    max-height: 100vh; /* Prevent overflow */
+    overflow-y: auto;
+  }
+
+  .room-header {
+    margin-bottom: 0.8rem; /* Reduced spacing */
+  }
+
+  .room-header h2 {
+    font-size: 1.1rem; /* Smaller on mobile */
+    margin-bottom: 0.3rem;
+  }
+
+  .players-list {
+    padding: 0.6rem; /* Reduced padding */
+    margin-bottom: 0.8rem; /* Reduced spacing */
+    max-height: 50vh; /* More restrictive height on mobile */
+  }
+
+  .players-card {
+    max-height: 55vh; /* Adjust container height for mobile */
+    padding: 0.8rem; /* Reduced padding */
+  }
+
+  .players-list h3 {
+    font-size: 0.9rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .players-list ul {
+    gap: 0.4rem;
+  }
+
+  .players-list li {
+    padding: 0.6rem 0.8rem;
+    font-size: 0.8rem;
+    min-height: 48px; /* Ensure touch targets are adequate */
+  }
+
+  /* Mobile avatar adjustments */
+  .players-list li div[style*="width: 36px"] {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 16px !important;
+  }
+
+  /* Mobile-optimized animations - less intense for performance */
+  .players-list li.first-player {
+    animation: firstPlayerWelcomeMobile 0.5s ease-out;
+  }
+
+  @keyframes firstPlayerWelcomeMobile {
+    0% {
+      opacity: 0;
+      transform: translateY(-15px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Mobile-optimized animations for existing players */
+  @keyframes existingPlayerRevealMobile {
+    0% {
+      opacity: 0;
+      transform: translateY(-10px) scale(0.95);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* Mobile-optimized simple dropdown animation */
+  @keyframes playerJoinDropdownMobile {
+    0% {
+      opacity: 0;
+      transform: translateY(-15px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .players-list li.existing-player {
+    animation: existingPlayerRevealMobile 0.3s ease-out;
+    opacity: 0; /* Start invisible */
+    animation-fill-mode: forwards; /* Keep final state */
+  }
+
+  .players-list li.newly-joined {
+    animation: playerJoinDropdownMobile 0.5s ease-out;
+    position: relative;
+  }
+
+  /* Staggered animation delays for mobile existing players */
+  .players-list li.existing-player:nth-of-type(1) {
+    animation-delay: 0s;
+  }
+  .players-list li.existing-player:nth-of-type(2) {
+    animation-delay: 0.08s;
+  }
+  .players-list li.existing-player:nth-of-type(3) {
+    animation-delay: 0.16s;
+  }
+  .players-list li.existing-player:nth-of-type(4) {
+    animation-delay: 0.24s;
+  }
+  .players-list li.existing-player:nth-of-type(5) {
+    animation-delay: 0.32s;
+  }
+  .players-list li.existing-player:nth-of-type(6) {
+    animation-delay: 0.4s;
+  }
+  .players-list li.existing-player:nth-of-type(7) {
+    animation-delay: 0.48s;
+  }
+  .players-list li.existing-player:nth-of-type(8) {
+    animation-delay: 0.56s;
+  }
+
+  /* Simple staggered delays for mobile newly joined players */
+  .players-list li.newly-joined:nth-of-type(1) {
+    animation-delay: 0s;
+  }
+  .players-list li.newly-joined:nth-of-type(2) {
+    animation-delay: 0.08s;
+  }
+  .players-list li.newly-joined:nth-of-type(3) {
+    animation-delay: 0.16s;
+  }
+  .players-list li.newly-joined:nth-of-type(4) {
+    animation-delay: 0.24s;
+  }
+  .players-list li.newly-joined:nth-of-type(5) {
+    animation-delay: 0.32s;
+  }
+  .players-list li.newly-joined:nth-of-type(6) {
+    animation-delay: 0.4s;
+  }
+  .players-list li.newly-joined:nth-of-type(7) {
+    animation-delay: 0.48s;
+  }
+  .players-list li.newly-joined:nth-of-type(8) {
+    animation-delay: 0.56s;
+  }
+
+  .players-list li.first-player {
+    animation: firstPlayerWelcomeMobile 0.5s ease-out;
+  }
+
+  @keyframes firstPlayerWelcomeMobile {
+    0% {
+      opacity: 0;
+      transform: translateY(-15px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .game-controls {
     margin-top: auto;
-    padding-top: 1rem;
+    padding-top: 0.8rem; /* Reduced padding */
+  }
+
+  .game-settings {
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
+  }
+
+  .game-settings h3 {
+    font-size: 0.9rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .word-source-selector {
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .word-source-selector label {
+    font-size: 0.8rem;
+  }
+
+  .category-select,
+  .custom-word-input input {
+    padding: 0.5rem;
+    font-size: 0.8rem;
+    margin-bottom: 0.6rem;
   }
 
   .game-action-buttons {
-    position: sticky;
-    bottom: 0;
-    background: var(--card-bg);
-    padding: 1rem 0 0 0;
+    position: static; /* Remove sticky positioning that can cause cut-off */
+    background: none; /* Remove background since card provides it */
+    padding: 1rem 0 5rem 0; /* Dramatically increase bottom padding for mobile scrolling */
     margin-top: 1rem;
+    margin-bottom: 4rem; /* Significantly increase bottom margin to ensure scroll space */
+    /* Ensure the buttons are always accessible */
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .start-button,
+  .end-button {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    margin-top: 0.6rem;
   }
 
   /* Mobile countdown overlay fixes */
@@ -1660,10 +2541,115 @@ body {
   .game-over-overlay h2 {
     font-size: 1.5rem;
   }
+
+  /* Game Settings Preview Mobile Optimization */
+  .game-settings-preview {
+    padding: 0.6rem; /* Reduced padding */
+    margin-bottom: 0.8rem; /* Reduced spacing */
+  }
+
+  .game-settings-preview h3 {
+    font-size: 0.9rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .setting-item {
+    font-size: 0.8rem;
+  }
+
+  /* Game Controls Mobile Optimization */
+  .game-controls {
+    padding: 0.6rem 0; /* Reduced vertical padding */
+    gap: 0.6rem; /* Reduced gap */
+  }
+
+  .game-controls .button {
+    padding: 0.6rem 1rem; /* Reduced button padding */
+    font-size: 0.85rem;
+  }
+
+  .game-controls .secondary {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.8rem;
+  }
 }
 
 /* Extra small mobile screens */
 @media (max-width: 480px) {
+  /* Room Creation Screen Optimizations */
+  .main-content {
+    max-width: 100%;
+    padding: 0.6rem;
+  }
+
+  /* Card-within-a-card small mobile adjustments */
+  .room-info-card,
+  .players-card,
+  .game-settings-card {
+    padding: 0.6rem;
+    margin-bottom: 0.6rem;
+    border-radius: 0.5rem;
+  }
+
+  .room-screen {
+    gap: 0.6rem;
+  }
+
+  .room-header {
+    margin: 0; /* Card provides margin */
+  }
+
+  /* Small mobile room code styles */
+  .room-code-display {
+    font-size: 1.6rem;
+    padding: 0.25rem 0.5rem;
+    min-height: 36px;
+  }
+
+  .copy-button {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.8rem;
+    gap: 0.3rem;
+    min-height: 36px; /* Smaller touch target matching room code */
+    border-radius: 0.6rem;
+    /* Better mobile touch feedback */
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
+    transition: transform 0.1s ease, background 0.2s ease;
+  }
+
+  .copy-button:active {
+    transform: scale(0.95);
+    background: linear-gradient(135deg, #d32f2f, #b71c1c) !important;
+  }
+
+  .copy-button.copied:active {
+    background: linear-gradient(135deg, #388e3c, #1b5e20) !important;
+  }
+
+  .room-label {
+    font-size: 0.8rem;
+  }
+
+  .players-list {
+    padding: 0.6rem;
+    max-height: 200px; /* Further reduced for small screens */
+  }
+
+  .player-item {
+    padding: 0.5rem 0.6rem;
+    font-size: 0.8rem;
+  }
+
+  .game-settings-preview {
+    padding: 0.5rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .game-controls .button {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.8rem;
+  }
+
   .countdown-overlay {
     padding: 0.5rem;
     padding-top: 1rem;
@@ -1722,6 +2708,34 @@ body {
 
   .word-overlay[data-very-long="true"] {
     font-size: 1.3rem;
+  }
+
+  /* CRITICAL: Final mobile scrolling override - ensure nothing prevents scrolling */
+  * {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  html,
+  body,
+  #root {
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow-y: scroll !important;
+    /* Override index.css body flex that centers content and prevents scrolling */
+    display: block !important;
+    place-items: unset !important;
+  }
+
+  .app-container,
+  .main-content,
+  .room-screen,
+  .game-screen {
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
 }
 
@@ -1890,10 +2904,12 @@ body {
   background: rgba(0, 0, 0, 0.95);
   backdrop-filter: blur(10px);
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* Changed from center to flex-start */
   justify-content: center;
   z-index: 1000;
   animation: fadeIn 0.3s ease-out;
+  overflow-y: auto; /* Allow scrolling within the overlay */
+  padding: 2rem 0; /* Add padding top and bottom */
 }
 
 .voting-content {
@@ -1905,6 +2921,9 @@ body {
   width: 90%;
   text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-height: none; /* Remove any height constraints */
+  overflow: visible; /* Allow content to expand */
+  margin: auto; /* Center the content */
 }
 
 .voting-content h2 {
@@ -1941,6 +2960,7 @@ body {
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  min-height: 60px;
 }
 
 .vote-button:hover:not(.disabled) {
@@ -2173,14 +3193,45 @@ body {
   .vote-button {
     padding: 0.75rem;
     font-size: 0.9rem;
+    min-height: 56px;
+  }
+
+  /* Mobile avatar adjustments for voting */
+  .vote-button div[style*="width: 32px"] {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 14px !important;
   }
 
   .final-vote-button {
     padding: 1rem;
-    font-size: 0.9rem;
   }
 
-  /* Mobile styles for eliminated highlight */
+  /* CRITICAL: Make voting overlay non-blocking on mobile */
+  .voting-overlay {
+    position: absolute !important; /* Change from fixed to absolute to allow background scrolling */
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: auto !important; /* Allow height to be determined by content */
+    min-height: 100vh !important; /* Ensure it covers the viewport */
+    height: auto !important; /* Allow it to expand with content */
+    background: rgba(0, 0, 0, 0.95) !important;
+    z-index: 999 !important; /* Lower z-index to allow background interaction */
+    overflow-y: visible !important;
+    padding: 1rem 0 5rem 0 !important; /* Extra bottom padding for scrolling */
+  }
+
+  .voting-content {
+    margin: 2rem auto !important;
+    position: relative !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+}
+
+/* Mobile styles for eliminated highlight */
+@media (max-width: 768px) {
   .vote-result.eliminated-highlight {
     margin: 0.75rem 0;
     padding: 1rem;

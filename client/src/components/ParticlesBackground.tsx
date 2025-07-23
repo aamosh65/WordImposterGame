@@ -46,8 +46,51 @@ const ParticlesBackground: React.FC<ParticlesBackgroundProps> = ({
     if (!ctx) return;
 
     const resizeCanvas = () => {
+      const oldWidth = canvas.width || window.innerWidth;
+      const oldHeight = canvas.height || window.innerHeight;
+
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+
+      // Calculate the area ratio to determine if we need more/fewer particles
+      const oldArea = oldWidth * oldHeight;
+      const newArea = canvas.width * canvas.height;
+      const areaRatio = oldArea > 0 ? newArea / oldArea : 1;
+
+      // Adjust particle count based on area change (only if significant change and particles exist)
+      if (
+        isInitializedRef.current &&
+        particlesRef.current.length > 0 &&
+        Math.abs(areaRatio - 1) > 0.2
+      ) {
+        const targetParticleCount = Math.round(
+          configRef.current.particleCount * Math.sqrt(areaRatio)
+        );
+        const currentCount = particlesRef.current.length;
+
+        if (targetParticleCount > currentCount) {
+          // Add more particles for larger viewport
+          const additionalParticles = Array.from(
+            { length: targetParticleCount - currentCount },
+            createParticle
+          );
+          particlesRef.current.push(...additionalParticles);
+        } else if (targetParticleCount < currentCount) {
+          // Remove particles for smaller viewport
+          particlesRef.current = particlesRef.current.slice(
+            0,
+            targetParticleCount
+          );
+        }
+      }
+
+      // Reposition particles that are now outside the canvas bounds
+      particlesRef.current.forEach((particle) => {
+        if (particle.x > canvas.width)
+          particle.x = Math.random() * canvas.width;
+        if (particle.y > canvas.height)
+          particle.y = Math.random() * canvas.height;
+      });
     };
 
     const createParticle = (): Particle => ({
@@ -67,14 +110,12 @@ const ParticlesBackground: React.FC<ParticlesBackgroundProps> = ({
     });
 
     const initParticles = () => {
-      // Only initialize particles once
-      if (!isInitializedRef.current) {
-        particlesRef.current = Array.from(
-          { length: configRef.current.particleCount },
-          createParticle
-        );
-        isInitializedRef.current = true;
-      }
+      // Initialize particles (can be called multiple times for resize)
+      particlesRef.current = Array.from(
+        { length: configRef.current.particleCount },
+        createParticle
+      );
+      isInitializedRef.current = true;
     };
 
     const updateParticle = (particle: Particle) => {
@@ -153,14 +194,33 @@ const ParticlesBackground: React.FC<ParticlesBackgroundProps> = ({
 
     const handleResize = () => {
       resizeCanvas();
-      // Recreate particles when window resizes
-      initParticles();
+      // Initialize particles if they haven't been created yet
+      if (!isInitializedRef.current) {
+        initParticles();
+      }
     };
 
-    window.addEventListener("resize", handleResize);
+    // Debounced resize handler for better performance
+    let resizeTimeout: number;
+    const debouncedResize = () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(handleResize, 100);
+    };
+
+    // Use ResizeObserver for more accurate viewport tracking
+    const resizeObserver = new ResizeObserver(() => {
+      debouncedResize();
+    });
+
+    resizeObserver.observe(document.documentElement);
+    window.addEventListener("resize", debouncedResize);
+    window.addEventListener("orientationchange", debouncedResize);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", debouncedResize);
+      window.removeEventListener("orientationchange", debouncedResize);
+      clearTimeout(resizeTimeout);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
@@ -175,10 +235,10 @@ const ParticlesBackground: React.FC<ParticlesBackgroundProps> = ({
         position: "fixed",
         top: 0,
         left: 0,
-        width: "100%",
-        height: "100%",
+        width: "100vw",
+        height: "100vh",
         pointerEvents: "none",
-        zIndex: -1,
+        zIndex: -10,
       }}
     />
   );

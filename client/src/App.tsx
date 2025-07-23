@@ -3,6 +3,7 @@ import { io, Socket } from "socket.io-client";
 import "./App.css";
 import DecryptedText from "./components/DecryptedText";
 import ParticlesBackground from "./components/ParticlesBackground";
+import ClickSpark from "./components/ClickSpark";
 
 // Wake Lock API types
 interface WakeLockSentinel {
@@ -778,6 +779,19 @@ function App() {
   const [wordSource, setWordSource] = useState("random");
   const [hostIsModerator, setHostIsModerator] = useState(false); // Whether host is acting as moderator
 
+  // Player animation states
+  const [newlyJoinedPlayers, setNewlyJoinedPlayers] = useState<Set<string>>(
+    new Set()
+  );
+  const [leavingPlayers, setLeavingPlayers] = useState<Set<string>>(new Set());
+  const [existingPlayersAnimating, setExistingPlayersAnimating] = useState<
+    Set<string>
+  >(new Set());
+  const [previousPlayers, setPreviousPlayers] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [playerCountUpdated, setPlayerCountUpdated] = useState(false);
+
   // Debug wordSource changes
   useEffect(() => {
     console.log("🔄 wordSource changed to:", wordSource);
@@ -865,6 +879,64 @@ function App() {
   // Toast message state
   const [toastMessage, setToastMessage] = useState<string>("");
   const [showToast, setShowToast] = useState<boolean>(false);
+
+  // Player avatar generation - space-themed icons
+  const spaceAvatars = [
+    "🚀",
+    "🛸",
+    "👽",
+    "🌌",
+    "⭐",
+    "🌟",
+    "💫",
+    "🌠",
+    "🪐",
+    "🌍",
+    "🌙",
+    "☄️",
+    "🛰️",
+    "🌕",
+    "🌖",
+    "🌗",
+    "🌘",
+    "🌑",
+    "🌒",
+    "🌓",
+    "🌔",
+    "🌎",
+    "🌏",
+    "🔭",
+  ];
+
+  const getPlayerAvatar = (playerId: string, playerName: string): string => {
+    // Create a simple hash from player ID and name for consistent avatar assignment
+    const hash = (playerId + playerName).split("").reduce((a, b) => {
+      a = (a << 5) - a + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    return spaceAvatars[Math.abs(hash) % spaceAvatars.length];
+  };
+
+  const getAvatarBackground = (playerId: string): string => {
+    // Generate different background colors for variety
+    const colors = [
+      "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+      "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+      "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
+      "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
+      "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
+      "linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)",
+      "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)",
+      "linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)",
+      "linear-gradient(135deg, #fad0c4 0%, #ffd1ff 100%)",
+    ];
+    const hash = playerId.split("").reduce((a, b) => {
+      a = (a << 5) - a + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    return colors[Math.abs(hash) % colors.length];
+  };
 
   // Game state reset function
   const resetGameState = useCallback(() => {
@@ -1307,7 +1379,83 @@ function App() {
     const handlePlayerListUpdate = (
       players: { id: string; name: string }[]
     ) => {
-      setPlayers(players);
+      // Detect newly joined players
+      const currentPlayerIds = new Set(previousPlayers.map((p) => p.id));
+      const newPlayerIds = new Set(players.map((p) => p.id));
+
+      // Find players who just joined
+      const justJoined = players.filter((p) => !currentPlayerIds.has(p.id));
+
+      // Find players who left (are in previous but not in current)
+      const justLeft = previousPlayers.filter((p) => !newPlayerIds.has(p.id));
+
+      // Animate player count if the number changed
+      if (
+        previousPlayers.length > 0 &&
+        players.length !== previousPlayers.length
+      ) {
+        setPlayerCountUpdated(true);
+        setTimeout(() => setPlayerCountUpdated(false), 600);
+      }
+
+      // Handle leaving players with animation - BEFORE updating the player list
+      if (justLeft.length > 0) {
+        console.log(
+          "🚪 Players leaving:",
+          justLeft.map((p) => p.name)
+        );
+        const leavingIds = new Set(justLeft.map((p) => p.id));
+        setLeavingPlayers(leavingIds);
+
+        // Delay the removal from player list to allow fade animation
+        setTimeout(() => {
+          setPlayers(players);
+          setPreviousPlayers(players);
+          setLeavingPlayers(new Set());
+        }, 400); // Match the animation duration
+      } else {
+        // Update players immediately if no one is leaving
+        setPlayers(players);
+        setPreviousPlayers(players);
+      }
+
+      // Handle joining players with stacked animation
+      if (justJoined.length > 0) {
+        console.log(
+          "🎉 Players joining:",
+          justJoined.map((p) => p.name)
+        );
+
+        // Start both animations simultaneously
+        const existingPlayerIds = new Set(previousPlayers.map((p) => p.id));
+        const joiningIds = new Set(justJoined.map((p) => p.id));
+
+        if (existingPlayerIds.size > 0) {
+          // Show existing players first
+          setExistingPlayersAnimating(existingPlayerIds);
+
+          // Start new players animation with a slight delay so they appear to come from existing players
+          setTimeout(() => {
+            setNewlyJoinedPlayers(joiningIds);
+          }, 300); // Small delay to let existing players start appearing first
+
+          // Clean up animations
+          setTimeout(() => {
+            setExistingPlayersAnimating(new Set());
+          }, 800); // Clean up existing players animation
+
+          setTimeout(() => {
+            setNewlyJoinedPlayers(new Set());
+          }, 1800); // Clean up new players animation (300ms delay + 1500ms animation)
+        } else {
+          // If no existing players, just animate the new players normally
+          setNewlyJoinedPlayers(joiningIds);
+
+          setTimeout(() => {
+            setNewlyJoinedPlayers(new Set());
+          }, 1800);
+        }
+      }
     };
 
     const handleHostId = (hostId: string) => {
@@ -1728,6 +1876,7 @@ function App() {
     testConnection,
     phase,
     resetGameState,
+    previousPlayers,
   ]);
 
   // Connection timeout effect - especially important for mobile
@@ -1897,6 +2046,10 @@ function App() {
 
   const startGame = () => {
     if (!roomCode) return;
+    if (players.length < 3) {
+      alert("You need at least 3 players to start the game");
+      return;
+    }
     if (
       wordSource === "custom" &&
       (!customWord.trim() || !customImposterWord.trim())
@@ -1934,13 +2087,97 @@ function App() {
     });
   };
 
-  const copyRoomCode = () => {
-    navigator.clipboard.writeText(roomCode);
-    setToastMessage("Copied to clipboard!");
-    setShowToast(true);
-    setTimeout(() => {
-      setShowToast(false);
-    }, 2000);
+  const copyRoomCode = async () => {
+    try {
+      // Modern browsers with clipboard API support
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(roomCode);
+        setToastMessage("Copied to clipboard!");
+        setShowToast(true);
+        setTimeout(() => {
+          setShowToast(false);
+        }, 2000);
+        return;
+      }
+
+      // Fallback for older browsers and mobile devices
+      const textArea = document.createElement("textarea");
+      textArea.value = roomCode;
+
+      // Make the textarea out of viewport
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      textArea.style.opacity = "0";
+      textArea.setAttribute("readonly", "");
+      textArea.setAttribute("contenteditable", "false");
+
+      document.body.appendChild(textArea);
+
+      // Mobile device specific handling
+      const isMobile =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent
+        );
+
+      if (isMobile) {
+        // For mobile devices, especially iOS
+        textArea.style.position = "absolute";
+        textArea.style.left = "0px";
+        textArea.style.top = "0px";
+        textArea.style.width = "1px";
+        textArea.style.height = "1px";
+        textArea.style.padding = "0";
+        textArea.style.border = "none";
+        textArea.style.outline = "none";
+        textArea.style.boxShadow = "none";
+        textArea.style.background = "transparent";
+
+        // Focus and select
+        textArea.focus();
+        textArea.setSelectionRange(0, 99999);
+
+        // iOS specific handling
+        if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+          const range = document.createRange();
+          range.selectNodeContents(textArea);
+          const selection = window.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+          textArea.setSelectionRange(0, 999999);
+        }
+      } else {
+        textArea.focus();
+        textArea.select();
+      }
+
+      // Execute copy command
+      const successful = document.execCommand("copy");
+      document.body.removeChild(textArea);
+
+      if (successful) {
+        setToastMessage("Copied to clipboard!");
+        setShowToast(true);
+        setTimeout(() => {
+          setShowToast(false);
+        }, 2000);
+      } else {
+        // If all else fails, show the room code for manual copying
+        setToastMessage("Tap and hold to copy: " + roomCode);
+        setShowToast(true);
+        setTimeout(() => {
+          setShowToast(false);
+        }, 4000);
+      }
+    } catch (err) {
+      console.log("Copy failed:", err);
+      // Final fallback - show room code for manual copying
+      setToastMessage("Tap and hold to copy: " + roomCode);
+      setShowToast(true);
+      setTimeout(() => {
+        setShowToast(false);
+      }, 4000);
+    }
   };
 
   const submitVote = (votedPlayerId: string) => {
@@ -2183,26 +2420,65 @@ function App() {
             </div>
 
             <div className="voting-players">
-              {votablePlayers.map((player) => (
-                <button
-                  key={player.id}
-                  className={`vote-button ${
-                    selectedVote === player.id ? "selected" : ""
-                  } ${
-                    hasVoted || isEliminated || isModerator ? "disabled" : ""
-                  }`}
-                  onClick={() =>
-                    !hasVoted &&
-                    !isEliminated &&
-                    !isModerator &&
-                    submitVote(player.id)
-                  }
-                  disabled={hasVoted || isEliminated || isModerator}
-                >
-                  {player.name}
-                  {selectedVote === player.id && hasVoted && " ✓"}
-                </button>
-              ))}
+              {votablePlayers.map((player) => {
+                // Check for animation classes
+                let animationClass = "";
+                if (leavingPlayers.has(player.id)) {
+                  animationClass = "leaving";
+                } else if (existingPlayersAnimating.has(player.id)) {
+                  animationClass = "existing-player";
+                } else if (newlyJoinedPlayers.has(player.id)) {
+                  animationClass = "newly-joined";
+                }
+
+                return (
+                  <button
+                    key={player.id}
+                    className={`vote-button ${
+                      selectedVote === player.id ? "selected" : ""
+                    } ${
+                      hasVoted || isEliminated || isModerator ? "disabled" : ""
+                    } ${animationClass}`.trim()}
+                    onClick={() =>
+                      !hasVoted &&
+                      !isEliminated &&
+                      !isModerator &&
+                      submitVote(player.id)
+                    }
+                    disabled={hasVoted || isEliminated || isModerator}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      justifyContent: "flex-start",
+                      padding: "12px 16px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "50%",
+                        background: getAvatarBackground(player.id),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "16px",
+                        flexShrink: 0,
+                        border: "2px solid rgba(255, 255, 255, 0.2)",
+                      }}
+                    >
+                      {getPlayerAvatar(player.id, player.name)}
+                    </div>
+                    <span style={{ flex: 1, textAlign: "left" }}>
+                      {player.name}
+                    </span>
+                    {selectedVote === player.id && hasVoted && (
+                      <span style={{ color: "var(--success)" }}>✓</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {hasVoted && !isEliminated && !isModerator && (
@@ -2463,656 +2739,767 @@ function App() {
   };
 
   return (
-    <div className={`app-container ${phase}`}>
-      {/* Particles Background */}
+    <ClickSpark
+      sparkColor="#ff4d4d"
+      sparkSize={3}
+      sparkRadius={15}
+      sparkCount={6}
+      duration={500}
+      easing="ease-out"
+    >
+      {/* Particles Background - outside app-container for full viewport coverage */}
       <ParticlesBackground
         particleCount={80}
         colors={["#ff4d4d", "#ffcd07", "#ffffff"]}
         speed={0.5}
         size={{ min: 2, max: 4 }}
       />
+      <div className={`app-container ${phase}`}>
+        {/* Toast notification */}
+        {showToast && (
+          <div
+            style={{
+              position: "fixed",
+              top: "20px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: toastMessage.includes("Tap and hold")
+                ? "rgba(255, 193, 7, 0.95)"
+                : "rgba(76, 175, 80, 0.95)",
+              color: "white",
+              padding: "16px 24px",
+              borderRadius: "12px",
+              zIndex: 9999,
+              fontSize: "14px",
+              fontWeight: "bold",
+              boxShadow: "0 6px 20px rgba(0, 0, 0, 0.4)",
+              animation: "slideIn 0.3s ease-out",
+              maxWidth: "90vw",
+              textAlign: "center",
+              wordBreak: "break-word",
+              border: toastMessage.includes("Tap and hold")
+                ? "2px solid #ffc107"
+                : "2px solid #4caf50",
+            }}
+          >
+            {toastMessage}
+          </div>
+        )}
 
-      {/* Toast notification */}
-      {showToast && (
+        {/* Show elimination overlay for eliminated players throughout the entire game */}
+        {isEliminated &&
+          (phase === "game" || phase === "countdown") &&
+          renderEliminationOverlay()}
+
+        {/* Show normal game content only for non-eliminated players */}
+        {!isEliminated &&
+          phase === "countdown" &&
+          countdown !== null &&
+          renderCountdown()}
+        {!isEliminated && phase === "gameOver" && renderGameOver()}
+        {!isEliminated &&
+          phase === "game" &&
+          role &&
+          showWordOverlay &&
+          renderWordOverlay()}
+        {showVotingOverlay && renderVotingOverlay()}
+
+        {/* Game over screen shows for everyone regardless of elimination status */}
+        {phase === "gameOver" && renderGameOver()}
+
         <div
-          style={{
-            position: "fixed",
-            top: "20px",
-            right: "20px",
-            background: "rgba(76, 175, 80, 0.9)",
-            color: "white",
-            padding: "12px 20px",
-            borderRadius: "8px",
-            zIndex: 9999,
-            fontSize: "14px",
-            fontWeight: "bold",
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
-            animation: "slideIn 0.3s ease-out",
-          }}
+          className={`main-content ${
+            phase === "lobby" || (phase === "game" && !isEliminated)
+              ? ""
+              : "blurred"
+          }`}
         >
-          {toastMessage}
-        </div>
-      )}
-
-      {/* Show elimination overlay for eliminated players throughout the entire game */}
-      {isEliminated &&
-        (phase === "game" || phase === "countdown") &&
-        renderEliminationOverlay()}
-
-      {/* Show normal game content only for non-eliminated players */}
-      {!isEliminated &&
-        phase === "countdown" &&
-        countdown !== null &&
-        renderCountdown()}
-      {!isEliminated && phase === "gameOver" && renderGameOver()}
-      {!isEliminated &&
-        phase === "game" &&
-        role &&
-        showWordOverlay &&
-        renderWordOverlay()}
-      {showVotingOverlay && renderVotingOverlay()}
-
-      {/* Game over screen shows for everyone regardless of elimination status */}
-      {phase === "gameOver" && renderGameOver()}
-
-      <div
-        className={`main-content ${
-          phase === "lobby" || (phase === "game" && !isEliminated)
-            ? ""
-            : "blurred"
-        }`}
-      >
-        {!joined ? (
-          <div className="join-screen">
-            <h1 className="title">
-              <DecryptedText
-                text="Word Imposter"
-                decryptDuration={3000}
-                pauseDuration={4000}
-              />
-            </h1>
-            {!isConnected && (
-              <div
-                style={{
-                  background:
-                    connectionStatus === "failed"
-                      ? "rgba(255, 77, 77, 0.3)"
-                      : "rgba(255, 193, 7, 0.3)",
-                  padding: "0.75rem",
-                  borderRadius: "0.5rem",
-                  marginBottom: "1rem",
-                  color:
-                    connectionStatus === "failed"
-                      ? "var(--accent-red)"
-                      : "#ffc107",
-                  fontSize: "0.9rem",
-                  border: `1px solid ${
-                    connectionStatus === "failed"
-                      ? "var(--accent-red)"
-                      : "#ffc107"
-                  }`,
-                }}
-              >
-                {connectionStatus === "connecting" && (
-                  <>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                      }}
-                    >
+          {!joined ? (
+            <div className="join-screen">
+              <h1 className="title">
+                <DecryptedText
+                  text="Word Imposter"
+                  decryptDuration={3000}
+                  pauseDuration={4000}
+                />
+              </h1>
+              <p className="tagline">
+                The ultimate game of words and deception
+              </p>
+              {!isConnected && (
+                <div
+                  style={{
+                    background:
+                      connectionStatus === "failed"
+                        ? "rgba(255, 77, 77, 0.3)"
+                        : "rgba(255, 193, 7, 0.3)",
+                    padding: "0.75rem",
+                    borderRadius: "0.5rem",
+                    marginBottom: "1rem",
+                    color:
+                      connectionStatus === "failed"
+                        ? "var(--accent-red)"
+                        : "#ffc107",
+                    fontSize: "0.9rem",
+                    border: `1px solid ${
+                      connectionStatus === "failed"
+                        ? "var(--accent-red)"
+                        : "#ffc107"
+                    }`,
+                  }}
+                >
+                  {connectionStatus === "connecting" && (
+                    <>
                       <div
                         style={{
-                          width: "16px",
-                          height: "16px",
-                          border: "2px solid #ffc107",
-                          borderTop: "2px solid transparent",
-                          borderRadius: "50%",
-                          animation: "spin 1s linear infinite",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
                         }}
-                      ></div>
-                      🔄 Connecting to server...
-                    </div>
-                    {isMobileDevice && (
-                      <div style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>
-                        📱 Optimizing for mobile connection...
-                        <br />
-                        Using HTTP polling for better compatibility
+                      >
+                        <div
+                          style={{
+                            width: "16px",
+                            height: "16px",
+                            border: "2px solid #ffc107",
+                            borderTop: "2px solid transparent",
+                            borderRadius: "50%",
+                            animation: "spin 1s linear infinite",
+                          }}
+                        ></div>
+                        🔄 Connecting to server...
                       </div>
-                    )}
-                  </>
-                )}
-                {connectionStatus === "reconnecting" && (
-                  <>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                      }}
-                    >
+                      {isMobileDevice && (
+                        <div
+                          style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}
+                        >
+                          📱 Optimizing for mobile connection...
+                          <br />
+                          Using HTTP polling for better compatibility
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {connectionStatus === "reconnecting" && (
+                    <>
                       <div
                         style={{
-                          width: "16px",
-                          height: "16px",
-                          border: "2px solid #ffc107",
-                          borderTop: "2px solid transparent",
-                          borderRadius: "50%",
-                          animation: "spin 1s linear infinite",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
                         }}
-                      ></div>
-                      🔄 Reconnecting... (Attempt {connectionAttempts})
-                    </div>
-                    <div style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>
-                      Please wait, trying to restore connection
-                    </div>
-                  </>
-                )}
-                {connectionStatus === "failed" && (
-                  <>
-                    ⚠️ Connection failed
-                    <div style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>
-                      {networkStatus === "offline"
-                        ? isMobileDevice
-                          ? "📱 Connection issues detected - please check your WiFi"
-                          : "📵 No internet connection detected"
-                        : "Please check your internet connection and try refreshing the page"}
-                    </div>
-                    <button
-                      onClick={() => {
-                        setConnectionStatus("connecting");
-                        setConnectionAttempts(0);
-                        setNetworkStatus("online"); // Reset network status
-                        if (isMobileDevice) {
-                          console.log(
-                            "📱 Mobile manual reconnection - attempting direct socket connection"
-                          );
-                          // For mobile, try direct socket connection instead of HTTP test
-                          socket.connect();
-                        } else {
-                          socket.connect();
-                        }
-                      }}
-                      style={{
-                        marginTop: "0.5rem",
-                        padding: "0.25rem 0.5rem",
-                        background: "var(--accent-red)",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "0.25rem",
-                        fontSize: "0.8rem",
-                        cursor: "pointer",
-                        marginRight: "0.5rem",
-                      }}
-                      disabled={networkStatus === "offline"}
-                    >
-                      {networkStatus === "offline"
-                        ? "Waiting for network..."
-                        : isMobileDevice
-                        ? "🔄 Retry Mobile Connection"
-                        : "Try Again"}
-                    </button>
-                    {connectionAttempts > 3 && (
+                      >
+                        <div
+                          style={{
+                            width: "16px",
+                            height: "16px",
+                            border: "2px solid #ffc107",
+                            borderTop: "2px solid transparent",
+                            borderRadius: "50%",
+                            animation: "spin 1s linear infinite",
+                          }}
+                        ></div>
+                        🔄 Reconnecting... (Attempt {connectionAttempts})
+                      </div>
+                      <div style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>
+                        Please wait, trying to restore connection
+                      </div>
+                    </>
+                  )}
+                  {connectionStatus === "failed" && (
+                    <>
+                      ⚠️ Connection failed
+                      <div style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>
+                        {networkStatus === "offline"
+                          ? isMobileDevice
+                            ? "📱 Connection issues detected - please check your WiFi"
+                            : "📵 No internet connection detected"
+                          : "Please check your internet connection and try refreshing the page"}
+                      </div>
                       <button
-                        onClick={() => window.location.reload()}
+                        onClick={() => {
+                          setConnectionStatus("connecting");
+                          setConnectionAttempts(0);
+                          setNetworkStatus("online"); // Reset network status
+                          if (isMobileDevice) {
+                            console.log(
+                              "📱 Mobile manual reconnection - attempting direct socket connection"
+                            );
+                            // For mobile, try direct socket connection instead of HTTP test
+                            socket.connect();
+                          } else {
+                            socket.connect();
+                          }
+                        }}
                         style={{
                           marginTop: "0.5rem",
                           padding: "0.25rem 0.5rem",
-                          background: "#ffc107",
-                          color: "black",
+                          background: "var(--accent-red)",
+                          color: "white",
                           border: "none",
                           borderRadius: "0.25rem",
                           fontSize: "0.8rem",
                           cursor: "pointer",
+                          marginRight: "0.5rem",
                         }}
+                        disabled={networkStatus === "offline"}
                       >
-                        🔄 Refresh Page
+                        {networkStatus === "offline"
+                          ? "Waiting for network..."
+                          : isMobileDevice
+                          ? "🔄 Retry Mobile Connection"
+                          : "Try Again"}
                       </button>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-            <div className="input-group">
-              <input
-                placeholder="Your Name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="text-input"
-              />
-              <input
-                placeholder="Room Code (optional)"
-                value={roomCode}
-                onChange={(e) =>
-                  setRoomCode(e.target.value.toUpperCase().replace(/\s/g, ""))
-                }
-                className="text-input"
-              />
-              <div className="button-group">
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    createRoom(e);
-                  }}
-                  className={`create-button ${name.trim() ? "has-name" : ""} ${
-                    roomCode.trim() ? "secondary-focus" : "primary-focus"
-                  }`}
-                  type="button"
-                  disabled={!isConnected || !name.trim()}
-                >
-                  Create Room
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    joinRoom(e);
-                  }}
-                  className={`join-button ${
-                    roomCode.trim() ? "has-room-code" : ""
-                  } ${roomCode.trim() ? "primary-focus" : "secondary-focus"}`}
-                  type="button"
-                  disabled={!isConnected || !name.trim() || !roomCode.trim()}
-                >
-                  Join Room
-                </button>
+                      {connectionAttempts > 3 && (
+                        <button
+                          onClick={() => window.location.reload()}
+                          style={{
+                            marginTop: "0.5rem",
+                            padding: "0.25rem 0.5rem",
+                            background: "#ffc107",
+                            color: "black",
+                            border: "none",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.8rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          🔄 Refresh Page
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              <div className="input-group">
+                <input
+                  placeholder="Your Name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="text-input"
+                />
+                <input
+                  placeholder="Room Code (optional)"
+                  value={roomCode}
+                  onChange={(e) =>
+                    setRoomCode(e.target.value.toUpperCase().replace(/\s/g, ""))
+                  }
+                  className="text-input"
+                />
+                <div className="button-group">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      createRoom(e);
+                    }}
+                    className={`create-button ${
+                      name.trim() ? "has-name" : ""
+                    } ${roomCode.trim() ? "secondary-focus" : "primary-focus"}`}
+                    type="button"
+                    disabled={!isConnected || !name.trim()}
+                  >
+                    Create Room
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      joinRoom(e);
+                    }}
+                    className={`join-button ${
+                      roomCode.trim() ? "has-room-code" : ""
+                    } ${roomCode.trim() ? "primary-focus" : "secondary-focus"}`}
+                    type="button"
+                    disabled={!isConnected || !name.trim() || !roomCode.trim()}
+                  >
+                    Join Room
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ) : phase === "game" && !showWordOverlay && !isEliminated ? (
-          <div className="game-screen">
-            {/* Discussion Phase UI */}
-            {discussionCountdown !== null ? (
-              <div className="discussion-phase">
-                {/* Minimal horizontal info bar */}
-                <div className="game-info-bar">
-                  <div className="countdown-mini">
-                    <span className="countdown-label">⏱️</span>
-                    <span className="countdown-time">
-                      {discussionCountdown}s
-                    </span>
-                  </div>
-                  <div className="role-section">
-                    <span
-                      className={`role-indicator ${
+          ) : phase === "game" && !showWordOverlay && !isEliminated ? (
+            <div className="game-screen">
+              {/* Discussion Phase UI */}
+              {discussionCountdown !== null ? (
+                <div className="discussion-phase">
+                  {/* Minimal horizontal info bar */}
+                  <div className="game-info-bar">
+                    <div className="countdown-mini">
+                      <span className="countdown-label">⏱️</span>
+                      <span className="countdown-time">
+                        {discussionCountdown}s
+                      </span>
+                    </div>
+                    <div className="role-section">
+                      <span
+                        className={`role-indicator ${
+                          role === "imposter" ? "imposter" : "player"
+                        }`}
+                      >
+                        {role === "imposter" ? "🕵️ IMPOSTER" : "👥 PLAYER"}
+                      </span>
+                    </div>
+                    <div
+                      className={`word-section ${
                         role === "imposter" ? "imposter" : "player"
                       }`}
                     >
-                      {role === "imposter" ? "🕵️ IMPOSTER" : "👥 PLAYER"}
-                    </span>
-                  </div>
-                  <div
-                    className={`word-section ${
-                      role === "imposter" ? "imposter" : "player"
-                    }`}
-                  >
-                    <span className="word-label">Word:</span>
-                    <span className="word-value">
-                      {role === "imposter" ? impostorWord || "???" : secretWord}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Full-screen chat overlay */}
-                <div className="chat-overlay">
-                  <div className="chat-overlay-content">
-                    <div className="chat-header">
-                      <h2>💬 Discussion Chat</h2>
-                      <p>Share clues about your word and find the imposter!</p>
-
-                      {/* Turn system indicator */}
-                      {isTurnSystemActive && (
-                        <div className="turn-indicator">
-                          <div className="turn-info">
-                            <span className="current-turn">
-                              {currentTurnPlayerId === mySocketId ? (
-                                <span className="your-turn">🎯 Your Turn!</span>
-                              ) : (
-                                <span className="other-turn">
-                                  🕰️ {currentTurnPlayerName}'s Turn
-                                </span>
-                              )}
-                            </span>
-                            <span className="turn-progress">
-                              ({turnIndex}/{totalPlayers})
-                            </span>
-                          </div>
-                          <div className="turn-timer">
-                            <span className="timer-text">
-                              ⏱️ {turnTimeLeft}s
-                            </span>
-                            <div className="timer-bar">
-                              <div
-                                className="timer-progress"
-                                style={{
-                                  width: `${
-                                    (turnTimeLeft / turnDuration) * 100
-                                  }%`,
-                                  backgroundColor:
-                                    turnTimeLeft <= 5
-                                      ? "#ff4d4d"
-                                      : turnTimeLeft <= 10
-                                      ? "#ffa500"
-                                      : "#4caf50",
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                      <span className="word-label">Word:</span>
+                      <span className="word-value">
+                        {role === "imposter"
+                          ? impostorWord || "???"
+                          : secretWord}
+                      </span>
                     </div>
+                  </div>
 
-                    <div className="chat-messages-container">
-                      {chatMessages.length === 0 ? (
-                        <div className="chat-empty">
-                          <p>
-                            💬 Start the discussion! Share clues about your
-                            word.
-                          </p>
-                        </div>
-                      ) : (
-                        chatMessages.map((msg) => (
-                          <div
-                            key={msg.id}
-                            className={`chat-message ${
-                              msg.senderId === mySocketId ? "own-message" : ""
-                            }`}
-                          >
-                            <div className="message-header">
-                              <span className="sender-name">
-                                {msg.senderName}
-                              </span>
-                              <span className="message-time">
-                                {new Date(msg.timestamp).toLocaleTimeString(
-                                  [],
-                                  {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  }
+                  {/* Full-screen chat overlay */}
+                  <div className="chat-overlay">
+                    <div className="chat-overlay-content">
+                      <div className="chat-header">
+                        <h2>💬 Discussion Chat</h2>
+                        <p>
+                          Share clues about your word and find the imposter!
+                        </p>
+
+                        {/* Turn system indicator */}
+                        {isTurnSystemActive && (
+                          <div className="turn-indicator">
+                            <div className="turn-info">
+                              <span className="current-turn">
+                                {currentTurnPlayerId === mySocketId ? (
+                                  <span className="your-turn">
+                                    🎯 Your Turn!
+                                  </span>
+                                ) : (
+                                  <span className="other-turn">
+                                    🕰️ {currentTurnPlayerName}'s Turn
+                                  </span>
                                 )}
                               </span>
+                              <span className="turn-progress">
+                                ({turnIndex}/{totalPlayers})
+                              </span>
                             </div>
-                            <div className="message-content">{msg.message}</div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    <div className="chat-input-section">
-                      {isTurnSystemActive &&
-                        currentTurnPlayerId !== mySocketId && (
-                          <div className="waiting-turn-message">
-                            <p>
-                              ⏳ Waiting for {currentTurnPlayerName} to speak...
-                            </p>
+                            <div className="turn-timer">
+                              <span className="timer-text">
+                                ⏱️ {turnTimeLeft}s
+                              </span>
+                              <div className="timer-bar">
+                                <div
+                                  className="timer-progress"
+                                  style={{
+                                    width: `${
+                                      (turnTimeLeft / turnDuration) * 100
+                                    }%`,
+                                    backgroundColor:
+                                      turnTimeLeft <= 5
+                                        ? "#ff4d4d"
+                                        : turnTimeLeft <= 10
+                                        ? "#ffa500"
+                                        : "#4caf50",
+                                  }}
+                                />
+                              </div>
+                            </div>
                           </div>
                         )}
+                      </div>
 
-                      <div className="chat-input-container">
-                        <input
-                          type="text"
-                          value={currentMessage}
-                          onChange={(e) => setCurrentMessage(e.target.value)}
-                          placeholder={
-                            isTurnSystemActive &&
-                            currentTurnPlayerId !== mySocketId
-                              ? "Wait for your turn..."
-                              : "Type your message..."
-                          }
-                          maxLength={200}
-                          onKeyPress={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                              e.preventDefault();
-                              sendChatMessage();
+                      <div className="chat-messages-container">
+                        {chatMessages.length === 0 ? (
+                          <div className="chat-empty">
+                            <p>
+                              💬 Start the discussion! Share clues about your
+                              word.
+                            </p>
+                          </div>
+                        ) : (
+                          chatMessages.map((msg) => (
+                            <div
+                              key={msg.id}
+                              className={`chat-message ${
+                                msg.senderId === mySocketId ? "own-message" : ""
+                              }`}
+                            >
+                              <div className="message-header">
+                                <span className="sender-name">
+                                  {msg.senderName}
+                                </span>
+                                <span className="message-time">
+                                  {new Date(msg.timestamp).toLocaleTimeString(
+                                    [],
+                                    {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    }
+                                  )}
+                                </span>
+                              </div>
+                              <div className="message-content">
+                                {msg.message}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="chat-input-section">
+                        {isTurnSystemActive &&
+                          currentTurnPlayerId !== mySocketId && (
+                            <div className="waiting-turn-message">
+                              <p>
+                                ⏳ Waiting for {currentTurnPlayerName} to
+                                speak...
+                              </p>
+                            </div>
+                          )}
+
+                        <div className="chat-input-container">
+                          <input
+                            type="text"
+                            value={currentMessage}
+                            onChange={(e) => setCurrentMessage(e.target.value)}
+                            placeholder={
+                              isTurnSystemActive &&
+                              currentTurnPlayerId !== mySocketId
+                                ? "Wait for your turn..."
+                                : "Type your message..."
                             }
-                          }}
-                          disabled={
-                            isEliminated ||
-                            (isTurnSystemActive &&
-                              currentTurnPlayerId !== mySocketId)
-                          }
-                          className="chat-input"
-                        />
-                        <button
-                          onClick={sendChatMessage}
-                          disabled={
-                            !currentMessage.trim() ||
-                            isEliminated ||
-                            (isTurnSystemActive &&
-                              currentTurnPlayerId !== mySocketId)
-                          }
-                          className="send-button"
-                        >
-                          Send
-                        </button>
+                            maxLength={200}
+                            onKeyPress={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                sendChatMessage();
+                              }
+                            }}
+                            disabled={
+                              isEliminated ||
+                              (isTurnSystemActive &&
+                                currentTurnPlayerId !== mySocketId)
+                            }
+                            className="chat-input"
+                          />
+                          <button
+                            onClick={sendChatMessage}
+                            disabled={
+                              !currentMessage.trim() ||
+                              isEliminated ||
+                              (isTurnSystemActive &&
+                                currentTurnPlayerId !== mySocketId)
+                            }
+                            className="send-button"
+                          >
+                            Send
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              /* Non-discussion phases - simpler layout */
-              <div className="simple-game-layout">
-                {/* Voting countdown banner */}
-                {votingCountdown !== null && !showVotingOverlay && (
-                  <div className="countdown-banner">
-                    <div className="countdown-content">
-                      <h3>🗳️ Voting Time!</h3>
-                      <div className="countdown-number">{votingCountdown}</div>
-                      <p>Discuss and vote for who you think the imposter is</p>
-                      {votingCountdown <= 10 && (
-                        <p className="countdown-warning">
-                          Time's running out - cast your vote!
+              ) : (
+                /* Non-discussion phases - simpler layout */
+                <div className="simple-game-layout">
+                  {/* Voting countdown banner */}
+                  {votingCountdown !== null && !showVotingOverlay && (
+                    <div className="countdown-banner">
+                      <div className="countdown-content">
+                        <h3>🗳️ Voting Time!</h3>
+                        <div className="countdown-number">
+                          {votingCountdown}
+                        </div>
+                        <p>
+                          Discuss and vote for who you think the imposter is
                         </p>
-                      )}
+                        {votingCountdown <= 10 && (
+                          <p className="countdown-warning">
+                            Time's running out - cast your vote!
+                          </p>
+                        )}
+                      </div>
                     </div>
+                  )}
+
+                  <div className="room-header">
+                    <h2>
+                      <span className="room-icon">🎮</span>
+                      Game in Progress
+                    </h2>
+                    <p>Room: {roomCode}</p>
                   </div>
-                )}
 
-                <div className="room-header">
-                  <h2>
-                    <span className="room-icon">🎮</span>
-                    Game in Progress
-                  </h2>
-                  <p>Room: {roomCode}</p>
-                </div>
-
-                {/* Show different content based on whether host is participating or not */}
-                {isRoomCreator &&
-                hostId === mySocketId &&
-                hostIsModerator &&
-                !role ? (
-                  <div className="host-observer-info">
-                    <div
-                      style={{
-                        background: "rgba(255, 77, 77, 0.1)",
-                        border: "2px solid rgba(255, 77, 77, 0.3)",
-                        borderRadius: "1rem",
-                        padding: "1.5rem",
-                        margin: "1rem 0",
-                        textAlign: "center",
-                      }}
-                    >
-                      <h3
-                        style={{
-                          color: "var(--accent-red)",
-                          marginBottom: "1rem",
-                        }}
-                      >
-                        👑 Host Observer Mode
-                      </h3>
-                      <p
-                        style={{
-                          color: "var(--text-secondary)",
-                          marginBottom: "1rem",
-                        }}
-                      >
-                        You are observing the game since you provided the custom
-                        words.
-                      </p>
+                  {/* Show different content based on whether host is participating or not */}
+                  {isRoomCreator &&
+                  hostId === mySocketId &&
+                  hostIsModerator &&
+                  !role ? (
+                    <div className="host-observer-info">
                       <div
                         style={{
-                          background: "rgba(255, 255, 255, 0.05)",
-                          borderRadius: "0.5rem",
-                          padding: "1rem",
-                          marginBottom: "1rem",
+                          background: "rgba(255, 77, 77, 0.1)",
+                          border: "2px solid rgba(255, 77, 77, 0.3)",
+                          borderRadius: "1rem",
+                          padding: "1.5rem",
+                          margin: "1rem 0",
+                          textAlign: "center",
                         }}
                       >
-                        <p
-                          style={{ fontWeight: "600", marginBottom: "0.5rem" }}
+                        <h3
+                          style={{
+                            color: "var(--accent-red)",
+                            marginBottom: "1rem",
+                          }}
                         >
-                          Words in play:
+                          👑 Host Observer Mode
+                        </h3>
+                        <p
+                          style={{
+                            color: "var(--text-secondary)",
+                            marginBottom: "1rem",
+                          }}
+                        >
+                          You are observing the game since you provided the
+                          custom words.
                         </p>
-                        <p style={{ color: "var(--success)" }}>
-                          Players: {customWord}
-                        </p>
-                        <p style={{ color: "var(--accent-red)" }}>
-                          Imposter: {customImposterWord}
+                        <div
+                          style={{
+                            background: "rgba(255, 255, 255, 0.05)",
+                            borderRadius: "0.5rem",
+                            padding: "1rem",
+                            marginBottom: "1rem",
+                          }}
+                        >
+                          <p
+                            style={{
+                              fontWeight: "600",
+                              marginBottom: "0.5rem",
+                            }}
+                          >
+                            Words in play:
+                          </p>
+                          <p style={{ color: "var(--success)" }}>
+                            Players: {customWord}
+                          </p>
+                          <p style={{ color: "var(--accent-red)" }}>
+                            Imposter: {customImposterWord}
+                          </p>
+                        </div>
+                        <p
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "var(--text-secondary)",
+                          }}
+                        >
+                          Watch the players discuss and try to find the
+                          imposter!
                         </p>
                       </div>
-                      <p
-                        style={{
-                          fontSize: "0.9rem",
-                          color: "var(--text-secondary)",
-                        }}
+                    </div>
+                  ) : null}
+
+                  {isRoomCreator && hostId === mySocketId && (
+                    <div className="game-action-buttons">
+                      <button onClick={endGame} className="end-button">
+                        End Game
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : !isEliminated ? (
+            <div className="room-screen">
+              <div className="room-info-card">
+                <div className="room-header">
+                  <div className="room-code-section">
+                    <span className="room-label">Room Code:</span>
+                    <div className="room-code-container">
+                      <span className="room-code-display">{roomCode}</span>
+                      <button
+                        onClick={copyRoomCode}
+                        className={`copy-button ${
+                          showToast && toastMessage === "Copied to clipboard!"
+                            ? "copied"
+                            : ""
+                        }`}
+                        title="Copy room code to clipboard"
+                        aria-label="Copy room code to clipboard"
                       >
-                        Watch the players discuss and try to find the imposter!
-                      </p>
+                        <span className="copy-icon">
+                          {showToast && toastMessage === "Copied to clipboard!"
+                            ? "✓"
+                            : "📋"}
+                        </span>
+                        <span className="copy-text">
+                          {showToast && toastMessage === "Copied to clipboard!"
+                            ? "Copied!"
+                            : "Copy"}
+                        </span>
+                      </button>
                     </div>
                   </div>
-                ) : null}
-
-                {isRoomCreator && hostId === mySocketId && (
-                  <div className="game-action-buttons">
-                    <button onClick={endGame} className="end-button">
-                      End Game
-                    </button>
+                  <div
+                    className={`player-count ${
+                      playerCountUpdated ? "updated" : ""
+                    }`}
+                  >
+                    {players.length}{" "}
+                    {players.length === 1 ? "player" : "players"} connected
                   </div>
-                )}
+                </div>
               </div>
-            )}
-          </div>
-        ) : !isEliminated ? (
-          <div className="room-screen">
-            <div className="room-header">
-              <h2>
-                <span className="room-icon">🏠</span>
-                Room:{" "}
-                <span style={{ fontSize: "24px", fontWeight: "bold" }}>
-                  {roomCode}
-                </span>
-                <button onClick={copyRoomCode} className="copy-button">
-                  Copy
-                </button>
-              </h2>
-              <p>
-                {players.length} {players.length === 1 ? "player" : "players"}{" "}
-                connected
-              </p>
-            </div>
 
-            <div className="players-list">
-              <h3
-                style={{
-                  fontSize: "16px",
-                  fontWeight: "bold",
-                  fontFamily: "sans-serif",
-                  color: "#FFFFFF",
-                }}
-              >
-                Players
-              </h3>
-              <ul>
-                {players.map((p) => (
-                  <li
-                    key={p.id}
-                    className={p.id === hostId ? "host" : ""}
+              <div className="players-card">
+                <div
+                  className={`players-list ${
+                    players.length > 4 ? "scrollable" : ""
+                  }`}
+                >
+                  <h3
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
+                      fontSize: "16px",
+                      fontWeight: "bold",
+                      fontFamily: "sans-serif",
                       color: "#FFFFFF",
                     }}
                   >
-                    <div
-                      style={{
-                        width: "20px",
-                        height: "20px",
-                        borderRadius: "50%",
-                        backgroundColor: "#4CAF50",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "10px",
-                        color: "white",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {p.name.charAt(0).toUpperCase()}
-                    </div>
-                    <span style={{ color: "#FFFFFF" }}>{p.name}</span>
-                    {p.id === hostId && <span className="host-badge">👑</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
+                    Players{" "}
+                    {players.length > 4 && (
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: "normal",
+                          color: "rgba(255, 255, 255, 0.7)",
+                          marginLeft: "8px",
+                        }}
+                      >
+                        (scroll to see all)
+                      </span>
+                    )}
+                  </h3>
+                  <ul>
+                    {players.map((p) => {
+                      // Determine animation classes
+                      let animationClass = "";
+                      if (leavingPlayers.has(p.id)) {
+                        animationClass = "leaving";
+                      } else if (existingPlayersAnimating.has(p.id)) {
+                        animationClass = "existing-player";
+                      } else if (newlyJoinedPlayers.has(p.id)) {
+                        // Special animation for the first player in the room - golden welcome
+                        if (players.length === 1) {
+                          animationClass = "first-player";
+                        } else {
+                          animationClass = "newly-joined";
+                        }
+                      }
 
-            {/* Game settings preview for non-host players only */}
-            {!(isRoomCreator && hostId === mySocketId) && (
-              <div className="game-settings-preview">
-                <h3
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: "bold",
-                    fontFamily: "sans-serif",
-                    color: "#FFFFFF",
-                  }}
-                >
-                  Game Settings
-                </h3>
-                <div className="settings-grid">
-                  <div className="setting-item">
-                    <span
-                      className="setting-label"
-                      style={{ color: "#FFFFFF" }}
-                    >
-                      Discussion Time:
-                    </span>
-                    <span
-                      className="setting-value"
-                      style={{ color: "#FFFFFF" }}
-                    >
-                      {typeof discussionTime === "string"
-                        ? "120"
-                        : discussionTime}{" "}
-                      seconds
-                    </span>
-                  </div>
-                  <div className="setting-item">
-                    <span
-                      className="setting-label"
-                      style={{ color: "#FFFFFF" }}
-                    >
-                      Voting Time:
-                    </span>
-                    <span
-                      className="setting-value"
-                      style={{ color: "#FFFFFF" }}
-                    >
-                      {typeof votingTime === "string" ? "60" : votingTime}{" "}
-                      seconds
-                    </span>
-                  </div>
+                      const baseClassName = p.id === hostId ? "host" : "";
+                      const fullClassName = animationClass
+                        ? `${baseClassName} ${animationClass}`.trim()
+                        : baseClassName;
+
+                      return (
+                        <li
+                          key={p.id}
+                          className={fullClassName}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            color: "#FFFFFF",
+                            padding: "12px 16px",
+                            minHeight: "60px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "50%",
+                              background: getAvatarBackground(p.id),
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "18px",
+                              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
+                              border:
+                                p.id === hostId
+                                  ? "2px solid #FFD700"
+                                  : "2px solid rgba(255, 255, 255, 0.2)",
+                              flexShrink: 0,
+                            }}
+                            title={`${p.name}'s avatar`}
+                          >
+                            {getPlayerAvatar(p.id, p.name)}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  color: "#FFFFFF",
+                                  fontWeight:
+                                    p.id === hostId ? "600" : "normal",
+                                  fontSize: "14px",
+                                }}
+                              >
+                                {p.name}
+                              </span>
+                              {p.id === hostId && (
+                                <span
+                                  style={{
+                                    background:
+                                      "linear-gradient(135deg, #FFD700, #FFA500)",
+                                    color: "#000",
+                                    padding: "2px 8px",
+                                    borderRadius: "12px",
+                                    fontSize: "11px",
+                                    fontWeight: "bold",
+                                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.3)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                  }}
+                                >
+                                  👑 HOST
+                                </span>
+                              )}
+                              {p.id === mySocketId && (
+                                <span
+                                  style={{
+                                    background: "rgba(76, 175, 80, 0.8)",
+                                    color: "#FFF",
+                                    padding: "2px 8px",
+                                    borderRadius: "12px",
+                                    fontSize: "11px",
+                                    fontWeight: "bold",
+                                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.3)",
+                                  }}
+                                >
+                                  YOU
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               </div>
-            )}
 
-            {isRoomCreator && hostId === mySocketId && (
-              <div className="game-controls">
-                {!gameStarted && (
-                  <div className="game-settings">
+              {/* Game settings preview for non-host players only */}
+              {!(isRoomCreator && hostId === mySocketId) && (
+                <div className="game-settings-card">
+                  <div className="game-settings-preview">
                     <h3
                       style={{
                         fontSize: "16px",
@@ -3123,304 +3510,377 @@ function App() {
                     >
                       Game Settings
                     </h3>
-
-                    <div className="word-source-selector">
-                      <label
-                        style={{
-                          color: "#FFFFFF",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          value="random"
-                          checked={wordSource === "random"}
-                          onChange={() => {
-                            console.log("📻 Setting wordSource to: random");
-                            setWordSource("random");
-                            setHostIsModerator(false); // Host participates with random words
-                            // Broadcast word source change to all players
-                            socket.emit("updateWordSource", {
-                              roomCode,
-                              wordSource: "random",
-                              hostIsModerator: false,
-                            });
-                          }}
-                          aria-label="Select random word option"
-                        />
-                        Random Word
-                      </label>
-                      <label
-                        style={{
-                          color: "#FFFFFF",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          value="custom"
-                          checked={wordSource === "custom"}
-                          onChange={() => {
-                            console.log("📻 Setting wordSource to: custom");
-                            setWordSource("custom");
-                            setHostIsModerator(true); // Host moderates with custom words
-                            // Broadcast word source change to all players
-                            socket.emit("updateWordSource", {
-                              roomCode,
-                              wordSource: "custom",
-                              hostIsModerator: true,
-                            });
-                          }}
-                          aria-label="Select custom word option"
-                        />
-                        Custom Word
-                      </label>
+                    <div className="settings-grid">
+                      <div className="setting-item">
+                        <span
+                          className="setting-label"
+                          style={{ color: "#FFFFFF" }}
+                        >
+                          Discussion Time:
+                        </span>
+                        <span
+                          className="setting-value"
+                          style={{ color: "#FFFFFF" }}
+                        >
+                          {typeof discussionTime === "string"
+                            ? "120"
+                            : discussionTime}{" "}
+                          seconds
+                        </span>
+                      </div>
+                      <div className="setting-item">
+                        <span
+                          className="setting-label"
+                          style={{ color: "#FFFFFF" }}
+                        >
+                          Voting Time:
+                        </span>
+                        <span
+                          className="setting-value"
+                          style={{ color: "#FFFFFF" }}
+                        >
+                          {typeof votingTime === "string" ? "60" : votingTime}{" "}
+                          seconds
+                        </span>
+                      </div>
                     </div>
+                  </div>
+                </div>
+              )}
 
-                    {/* No category selection needed for random words - server chooses */}
+              {isRoomCreator && hostId === mySocketId && (
+                <div className="game-settings-card">
+                  <div className="game-controls">
+                    {!gameStarted && (
+                      <div className="game-settings">
+                        <h3
+                          style={{
+                            fontSize: "16px",
+                            fontWeight: "bold",
+                            fontFamily: "sans-serif",
+                            color: "#FFFFFF",
+                          }}
+                        >
+                          Game Settings
+                        </h3>
 
-                    {wordSource === "custom" && (
-                      <div className="custom-word-input">
-                        <input
-                          type="text"
-                          value={customWord}
-                          onChange={(e) => setCustomWord(e.target.value)}
-                          placeholder="Enter word for players"
-                          aria-label="Word for players"
-                          style={{
-                            background: "var(--card-bg)",
-                            color: "var(--text-primary)",
-                            border: "1px solid var(--text-secondary)",
-                            borderRadius: "0.25rem",
-                            padding: "0.5rem",
-                          }}
-                        />
-                        <input
-                          type="text"
-                          value={customImposterWord}
-                          onChange={(e) =>
-                            setCustomImposterWord(e.target.value)
-                          }
-                          placeholder="Enter word for imposter"
-                          aria-label="Word for imposter"
-                          style={{
-                            background: "var(--card-bg)",
-                            color: "var(--text-primary)",
-                            border: "1px solid var(--text-secondary)",
-                            borderRadius: "0.25rem",
-                            padding: "0.5rem",
-                          }}
-                        />
+                        <div className="word-source-selector">
+                          <label
+                            style={{
+                              color: "#FFFFFF",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              value="random"
+                              checked={wordSource === "random"}
+                              onChange={() => {
+                                console.log("📻 Setting wordSource to: random");
+                                setWordSource("random");
+                                setHostIsModerator(false); // Host participates with random words
+                                // Broadcast word source change to all players
+                                socket.emit("updateWordSource", {
+                                  roomCode,
+                                  wordSource: "random",
+                                  hostIsModerator: false,
+                                });
+                              }}
+                              aria-label="Select random word option"
+                            />
+                            Random Word
+                          </label>
+                          <label
+                            style={{
+                              color: "#FFFFFF",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              value="custom"
+                              checked={wordSource === "custom"}
+                              onChange={() => {
+                                console.log("📻 Setting wordSource to: custom");
+                                setWordSource("custom");
+                                setHostIsModerator(true); // Host moderates with custom words
+                                // Broadcast word source change to all players
+                                socket.emit("updateWordSource", {
+                                  roomCode,
+                                  wordSource: "custom",
+                                  hostIsModerator: true,
+                                });
+                              }}
+                              aria-label="Select custom word option"
+                            />
+                            Custom Word
+                          </label>
+                        </div>
+
+                        {/* No category selection needed for random words - server chooses */}
+
+                        {wordSource === "custom" && (
+                          <div className="custom-word-input">
+                            <input
+                              type="text"
+                              value={customWord}
+                              onChange={(e) => setCustomWord(e.target.value)}
+                              placeholder="Enter word for players"
+                              aria-label="Word for players"
+                              style={{
+                                background: "var(--card-bg)",
+                                color: "var(--text-primary)",
+                                border: "1px solid var(--text-secondary)",
+                                borderRadius: "0.25rem",
+                                padding: "0.5rem",
+                              }}
+                            />
+                            <input
+                              type="text"
+                              value={customImposterWord}
+                              onChange={(e) =>
+                                setCustomImposterWord(e.target.value)
+                              }
+                              placeholder="Enter word for imposter"
+                              aria-label="Word for imposter"
+                              style={{
+                                background: "var(--card-bg)",
+                                color: "var(--text-primary)",
+                                border: "1px solid var(--text-secondary)",
+                                borderRadius: "0.25rem",
+                                padding: "0.5rem",
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        <div className="imposter-mode-selector">
+                          <label
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              marginTop: "1rem",
+                              color: "#FFFFFF",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={imposterGetsWord}
+                              onChange={(e) =>
+                                setImposterGetsWord(e.target.checked)
+                              }
+                              aria-label="Give imposter a different word"
+                            />
+                            <span>Give imposter a different word</span>
+                          </label>
+                        </div>
+
+                        <div className="voting-time-selector">
+                          <label
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              marginTop: "1rem",
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: "180px",
+                                textAlign: "left",
+                                color: "#FFFFFF",
+                              }}
+                            >
+                              Discussion time (seconds):
+                            </span>
+                            <input
+                              type="number"
+                              min="10"
+                              max="300"
+                              step="30"
+                              value={discussionTime}
+                              placeholder="Enter seconds: 10-300"
+                              aria-label="Discussion time in seconds"
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === "") {
+                                  setDiscussionTime("");
+                                } else {
+                                  const numValue = parseInt(value);
+                                  if (!isNaN(numValue) && numValue >= 0) {
+                                    setDiscussionTime(numValue);
+                                    // Emit real-time update to other players
+                                    socket.emit("updateTimers", {
+                                      roomCode,
+                                      discussionTime: numValue,
+                                      votingTime:
+                                        typeof votingTime === "string"
+                                          ? 60
+                                          : votingTime,
+                                    });
+                                  }
+                                }
+                              }}
+                              style={{
+                                width: "80px",
+                                padding: "0.25rem",
+                                borderRadius: "0.25rem",
+                                border: "1px solid var(--text-secondary)",
+                                background: "var(--card-bg)",
+                                color: "var(--text-primary)",
+                              }}
+                            />
+                          </label>
+                        </div>
+
+                        <div className="voting-time-selector">
+                          <label
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              marginTop: "1rem",
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: "180px",
+                                textAlign: "left",
+                                color: "#FFFFFF",
+                              }}
+                            >
+                              Voting time (seconds):
+                            </span>
+                            <input
+                              type="number"
+                              min="10"
+                              max="300"
+                              step="10"
+                              value={votingTime}
+                              placeholder="Enter seconds: 10-300"
+                              aria-label="Voting time in seconds"
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === "") {
+                                  setVotingTime("");
+                                } else {
+                                  const numValue = parseInt(value);
+                                  if (!isNaN(numValue) && numValue >= 0) {
+                                    setVotingTime(numValue);
+                                    // Emit real-time update to other players
+                                    socket.emit("updateTimers", {
+                                      roomCode,
+                                      discussionTime:
+                                        typeof discussionTime === "string"
+                                          ? 120
+                                          : discussionTime,
+                                      votingTime: numValue,
+                                    });
+                                  }
+                                }
+                              }}
+                              style={{
+                                width: "80px",
+                                padding: "0.25rem",
+                                borderRadius: "0.25rem",
+                                border: "1px solid var(--text-secondary)",
+                                background: "var(--card-bg)",
+                                color: "var(--text-primary)",
+                              }}
+                            />
+                          </label>
+                        </div>
                       </div>
                     )}
 
-                    <div className="imposter-mode-selector">
-                      <label
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                          marginTop: "1rem",
-                          color: "#FFFFFF",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={imposterGetsWord}
-                          onChange={(e) =>
-                            setImposterGetsWord(e.target.checked)
-                          }
-                          aria-label="Give imposter a different word"
-                        />
-                        <span>Give imposter a different word</span>
-                      </label>
-                    </div>
-
-                    <div className="voting-time-selector">
-                      <label
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                          marginTop: "1rem",
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: "180px",
-                            textAlign: "left",
-                            color: "#FFFFFF",
-                          }}
-                        >
-                          Discussion time (seconds):
-                        </span>
-                        <input
-                          type="number"
-                          min="10"
-                          max="300"
-                          step="30"
-                          value={discussionTime}
-                          placeholder="Enter seconds: 10-300"
-                          aria-label="Discussion time in seconds"
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            if (value === "") {
-                              setDiscussionTime("");
-                            } else {
-                              const numValue = parseInt(value);
-                              if (!isNaN(numValue) && numValue >= 0) {
-                                setDiscussionTime(numValue);
-                                // Emit real-time update to other players
-                                socket.emit("updateTimers", {
-                                  roomCode,
-                                  discussionTime: numValue,
-                                  votingTime:
-                                    typeof votingTime === "string"
-                                      ? 60
-                                      : votingTime,
-                                });
-                              }
+                    <div className="game-action-buttons">
+                      {!gameStarted ? (
+                        <div style={{ position: "relative", width: "100%" }}>
+                          <button
+                            onClick={startGame}
+                            className="start-button"
+                            disabled={isStartingGame || players.length < 3}
+                            aria-label="Start the game"
+                            title={
+                              players.length < 3
+                                ? "You need at least 3 players to start"
+                                : "Start the game"
                             }
-                          }}
-                          style={{
-                            width: "80px",
-                            padding: "0.25rem",
-                            borderRadius: "0.25rem",
-                            border: "1px solid var(--text-secondary)",
-                            background: "var(--card-bg)",
-                            color: "var(--text-primary)",
-                          }}
-                        />
-                      </label>
-                    </div>
-
-                    <div className="voting-time-selector">
-                      <label
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                          marginTop: "1rem",
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: "180px",
-                            textAlign: "left",
-                            color: "#FFFFFF",
-                          }}
-                        >
-                          Voting time (seconds):
-                        </span>
-                        <input
-                          type="number"
-                          min="10"
-                          max="300"
-                          step="10"
-                          value={votingTime}
-                          placeholder="Enter seconds: 10-300"
-                          aria-label="Voting time in seconds"
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            if (value === "") {
-                              setVotingTime("");
-                            } else {
-                              const numValue = parseInt(value);
-                              if (!isNaN(numValue) && numValue >= 0) {
-                                setVotingTime(numValue);
-                                // Emit real-time update to other players
-                                socket.emit("updateTimers", {
-                                  roomCode,
-                                  discussionTime:
-                                    typeof discussionTime === "string"
-                                      ? 120
-                                      : discussionTime,
-                                  votingTime: numValue,
-                                });
+                            style={{
+                              transform: isStartingGame ? "none" : "scale(1)",
+                              transition:
+                                "transform 0.2s ease, box-shadow 0.2s ease",
+                              boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+                              position: "relative",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "8px",
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isStartingGame && players.length >= 3) {
+                                e.currentTarget.style.transform = "scale(1.05)";
                               }
-                            }
-                          }}
-                          style={{
-                            width: "80px",
-                            padding: "0.25rem",
-                            borderRadius: "0.25rem",
-                            border: "1px solid var(--text-secondary)",
-                            background: "var(--card-bg)",
-                            color: "var(--text-primary)",
-                          }}
-                        />
-                      </label>
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isStartingGame && players.length >= 3) {
+                                e.currentTarget.style.transform = "scale(1)";
+                              }
+                            }}
+                          >
+                            {isStartingGame && (
+                              <div
+                                style={{
+                                  width: "20px",
+                                  height: "20px",
+                                  border: "2px solid #ffffff",
+                                  borderTop: "2px solid transparent",
+                                  borderRadius: "50%",
+                                  animation: "spin 1s linear infinite",
+                                }}
+                              />
+                            )}
+                            Start Game
+                            {players.length < 3 && (
+                              <span
+                                style={{
+                                  fontSize: "0.8rem",
+                                  marginLeft: "0.5rem",
+                                }}
+                              >
+                                ({players.length}/3)
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={endGame}
+                          className="end-button"
+                          aria-label="End the game"
+                        >
+                          End Game
+                        </button>
+                      )}
                     </div>
                   </div>
-                )}
-
-                <div className="game-action-buttons">
-                  {!gameStarted ? (
-                    <button
-                      onClick={startGame}
-                      className="start-button"
-                      disabled={isStartingGame}
-                      aria-label="Start the game"
-                      style={{
-                        transform: isStartingGame ? "none" : "scale(1)",
-                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
-                        boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
-                        position: "relative",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "8px",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isStartingGame) {
-                          e.currentTarget.style.transform = "scale(1.05)";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isStartingGame) {
-                          e.currentTarget.style.transform = "scale(1)";
-                        }
-                      }}
-                    >
-                      {isStartingGame && (
-                        <div
-                          style={{
-                            width: "20px",
-                            height: "20px",
-                            border: "2px solid #ffffff",
-                            borderTop: "2px solid transparent",
-                            borderRadius: "50%",
-                            animation: "spin 1s linear infinite",
-                          }}
-                        />
-                      )}
-                      Start Game
-                    </button>
-                  ) : (
-                    <button
-                      onClick={endGame}
-                      className="end-button"
-                      aria-label="End the game"
-                    >
-                      End Game
-                    </button>
-                  )}
                 </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          // Eliminated players see nothing in main content - only the elimination overlay
-          <div className="eliminated-main-content">
-            {/* Intentionally empty - eliminated players only see the elimination overlay */}
-          </div>
-        )}
+              )}
+            </div>
+          ) : (
+            // Eliminated players see nothing in main content - only the elimination overlay
+            <div className="eliminated-main-content">
+              {/* Intentionally empty - eliminated players only see the elimination overlay */}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </ClickSpark>
   );
 }
 
