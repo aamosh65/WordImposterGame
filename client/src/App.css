@@ -35,7 +35,7 @@
     align-items: center !important;
     justify-content: center !important;
     overflow-y: auto !important;
-    padding: 0 !important; /* Remove all padding for true centering */
+    padding: 60px 0 20px 0 !important; /* Add top padding for mobile browser header */
     margin: 0 !important; /* Remove all margins */
   }
 
@@ -524,7 +524,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center; /* Center content vertically and horizontally */
-  padding: 0; /* Remove all padding for true centering */
+  padding: 120px 0 20px 0; /* Add top padding to avoid browser header overlap */
   margin: 0; /* Remove any margins */
   overflow-x: hidden;
   overflow-y: auto; /* Allow scrolling when content overflows */
@@ -537,14 +537,14 @@ body {
 
 /* Remove restrictions from main content */
 .main-content {
-  width: calc(100% - 2rem); /* Account for desired spacing from edges */
-  max-width: 26rem; /* Constrain maximum width */
+  width: calc(100% - 1.5rem); /* Reduced spacing from edges for better space utilization */
+  max-width: 28rem; /* Slightly increased maximum width */
   height: auto;
-  margin: 0; /* Remove all margins - centering handled by parent */
+  margin: 1.5rem 0 1.5rem 0; /* Equal top and bottom margin for balanced spacing */
   background: var(--card-bg);
   border-radius: var(--border-radius);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  padding: 1.5rem;
+  padding: 0.3rem; /* Ultra minimal padding */
   text-align: center;
   position: relative;
   z-index: 1;
@@ -553,6 +553,9 @@ body {
   flex-shrink: 0; /* Don't shrink in flex container */
   overflow: visible;
   box-sizing: border-box;
+  /* Ensure efficient space usage */
+  min-height: auto;
+  max-height: none;
 }
 
 /* Bubbles Background - Fixed for zoom compatibility */
@@ -1136,11 +1139,15 @@ body {
 .room-screen {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  margin: 1rem auto 2rem auto; /* Reduce top margin, add bottom margin for scrolling */
+  gap: 0.4rem; /* Further reduced gap for ultra compact layout */
+  margin: 0.5rem auto 2rem auto; /* Further reduced top margin */
   max-width: 90%; /* Limit width for better proportions */
-  padding: 1rem 0; /* Reduce internal padding */
+  padding: 0.5rem 0; /* Further reduced internal padding */
   width: 100%; /* Ensure full width within max-width */
+  /* Ensure content fits within viewport */
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 /* Card-within-a-card containers */
@@ -1148,30 +1155,42 @@ body {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0.75rem;
-  padding: 1rem;
+  padding: 0.4rem; /* Ultra minimal padding */
   backdrop-filter: blur(10px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  /* Ensure card doesn't take excessive space */
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .players-card {
   background: rgba(255, 77, 77, 0.05);
   border: 1px solid rgba(255, 77, 77, 0.15);
   border-radius: 0.75rem;
-  padding: 1rem;
+  padding: 0.4rem; /* Ultra minimal padding */
   backdrop-filter: blur(10px);
   box-shadow: 0 2px 8px rgba(255, 77, 77, 0.1);
-  max-height: 60vh; /* Prevent overflow on mobile */
+  max-height: 50vh; /* Reduced max height to leave more space for other content */
   overflow-y: auto; /* Enable scrolling if needed */
   overflow-x: hidden; /* Prevent horizontal overflow */
+  /* Ensure card doesn't take excessive space */
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .game-settings-card {
   background: rgba(255, 205, 7, 0.03);
   border: 1px solid rgba(255, 205, 7, 0.15);
   border-radius: 0.75rem;
-  padding: 1rem;
+  padding: 0.4rem; /* Ultra minimal padding */
   backdrop-filter: blur(10px);
   box-shadow: 0 2px 8px rgba(255, 205, 7, 0.1);
+  /* Ensure card doesn't take excessive space */
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .room-header {
@@ -1181,7 +1200,10 @@ body {
 /* New room code emphasis styles */
 .room-code-section {
   text-align: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.3rem; /* Further reduced margin */
+  /* Ensure section doesn't take excessive space */
+  width: 100%;
+  max-width: 100%;
 }
 
 .room-label {
@@ -1198,34 +1220,42 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
+  gap: 0.5rem; /* Reduced gap for more compact layout */
   flex-wrap: wrap;
+  /* Ensure container doesn't expand unnecessarily */
+  width: 100%;
+  max-width: 100%;
 }
 
 .room-code-display {
   font-family: "VT323", monospace;
-  font-size: 2.2rem;
+  font-size: 1.8rem; /* Reduced from 2.2rem for better fit */
   font-weight: bold;
   color: var(--accent-red);
   text-shadow: 0 0 10px rgba(255, 77, 77, 0.3);
   letter-spacing: 0.1em;
   background: rgba(255, 77, 77, 0.1);
-  padding: 0.4rem 0.8rem;
+  padding: 0.3rem 0.6rem; /* Reduced padding for more compact display */
   border-radius: 0.5rem;
   border: 2px solid rgba(255, 77, 77, 0.3);
-  min-height: 40px;
+  min-height: 36px; /* Reduced from 40px */
   display: flex;
   align-items: center;
   line-height: 1;
+  /* Ensure it doesn't take too much space */
+  max-width: 100%;
+  word-break: break-all; /* Allow breaking if room code is very long */
 }
 
 .player-count {
   text-align: center;
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.8rem; /* Slightly smaller for more compact layout */
   font-family: "Quicksand", sans-serif;
   margin: 0;
   transition: all 0.3s ease;
+  /* Ensure it doesn't take excessive space */
+  line-height: 1.2;
 }
 
 .player-count.updated {
@@ -1250,7 +1280,7 @@ body {
 .copy-button {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.3rem; /* Reduced gap for more compact button */
   background: linear-gradient(
     135deg,
     var(--accent-red),
@@ -1259,13 +1289,13 @@ body {
   color: white;
   border: none;
   border-radius: 0.5rem;
-  padding: 0.6rem 1rem;
+  padding: 0.4rem 0.8rem; /* Reduced padding for more compact button */
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem; /* Slightly smaller font */
   cursor: pointer;
   transition: all 0.3s ease;
   font-family: "Quicksand", sans-serif;
-  min-height: 40px;
+  min-height: 36px; /* Reduced to match room code display */
   white-space: nowrap;
   /* Mobile touch improvements */
   -webkit-tap-highlight-color: transparent;
@@ -1321,17 +1351,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  font-size: 1.3rem; /* Reduced from 1.5rem */
-  margin-bottom: 0.5rem;
+  gap: 0.4rem; /* Reduced gap */
+  font-size: 1.2rem; /* Further reduced for more compact header */
+  margin-bottom: 0.2rem; /* Further reduced margin */
 }
 
 .room-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem; /* Reduced from 1.8rem */
-  height: 1.5rem; /* Reduced from 1.8rem */
+  width: 1.3rem; /* Further reduced for more compact header */
+  height: 1.3rem; /* Further reduced for more compact header */
   border-radius: 50%;
   background: rgba(255, 77, 77, 0.2);
   animation: pulse 2s infinite;
@@ -2120,6 +2150,47 @@ body {
   text-shadow: 0 4px 32px rgba(255, 77, 77, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+/* Laptop/Desktop optimizations for room code display */
+@media (min-width: 769px) and (max-width: 1200px) {
+  .room-code-display {
+    font-size: 1.6rem; /* Slightly smaller for laptop screens */
+    padding: 0.3rem 0.6rem;
+    min-height: 34px;
+  }
+  
+  .copy-button {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.8rem;
+    min-height: 34px;
+  }
+  
+  .room-info-card,
+  .players-card,
+  .game-settings-card {
+    padding: 0.9rem; /* Slightly more padding than mobile but less than desktop */
+  }
+  
+  .room-screen {
+    gap: 0.9rem;
+    margin: 0.75rem auto 2rem auto;
+  }
+}
+
+/* Large desktop optimizations */
+@media (min-width: 1201px) {
+  .room-code-display {
+    font-size: 1.8rem; /* Original size for large screens */
+    padding: 0.3rem 0.6rem;
+    min-height: 36px;
+  }
+  
+  .copy-button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    min-height: 36px;
+  }
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   /* Ensure body and html can scroll properly on mobile */
@@ -2144,7 +2215,7 @@ body {
     overflow-y: visible; /* Change to visible to allow natural scrolling */
     overflow-x: hidden;
     padding: 0.25rem; /* Reduced from 0.5rem */
-    padding-top: 3rem; /* Fixed top padding for mobile to avoid browser header */
+    padding-top: 80px; /* Reduced mobile top padding for browser header */
     padding-bottom: 10rem; /* Significantly increase bottom padding for guaranteed scroll space */
     padding-left: max(0.25rem, var(--safe-area-inset-left));
     padding-right: max(0.25rem, var(--safe-area-inset-right));
@@ -2153,9 +2224,9 @@ body {
   }
 
   .main-content {
-    padding: 1rem; /* Reduced from 1.5rem */
+    padding: 0.25rem; /* Ultra minimal padding for mobile */
     max-width: 100%;
-    margin: 0.5rem auto 2rem auto; /* Add bottom margin to ensure space for scrolling */
+    margin: 1rem auto 1rem auto; /* Equal top and bottom margin for mobile */
     min-height: auto;
     width: calc(100% - 0.5rem); /* Adjusted for smaller padding */
     box-sizing: border-box; /* Ensure proper sizing */
@@ -2226,10 +2297,10 @@ body {
   }
 
   .room-screen {
-    gap: 0.8rem;
-    margin: 0.5rem auto 5rem auto; /* Dramatically increase bottom margin for mobile scrolling */
+    gap: 0.6rem; /* Further reduced gap for mobile */
+    margin: 0.25rem auto 5rem auto; /* Further reduced top margin for mobile */
     max-width: 95%; /* Slightly more width on mobile */
-    padding: 0.5rem 0 4rem 0; /* Significantly increase bottom padding to ensure scroll space */
+    padding: 0.25rem 0 4rem 0; /* Further reduced top padding */
     /* Ensure room screen can be scrolled */
     min-height: auto;
     height: auto;
@@ -2283,22 +2354,22 @@ body {
 
   /* Mobile room code emphasis styles */
   .room-code-display {
-    font-size: 1.8rem;
-    padding: 0.3rem 0.6rem;
-    min-height: 40px;
+    font-size: 1.4rem; /* Further reduced for mobile */
+    padding: 0.25rem 0.5rem; /* More compact padding */
+    min-height: 32px; /* Smaller height for mobile */
   }
 
   .room-code-container {
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.4rem; /* Reduced gap */
   }
 
   .copy-button {
     margin: 0;
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
-    min-height: 40px;
-    gap: 0.3rem;
+    padding: 0.3rem 0.6rem; /* More compact padding */
+    font-size: 0.8rem; /* Smaller font for mobile */
+    min-height: 32px; /* Match room code display height */
+    gap: 0.25rem; /* Reduced gap */
   }
 
   .copy-icon {
@@ -2666,17 +2737,17 @@ body {
 
   /* Small mobile room code styles */
   .room-code-display {
-    font-size: 1.6rem;
-    padding: 0.25rem 0.5rem;
-    min-height: 36px;
+    font-size: 1.2rem; /* Even smaller for very small screens */
+    padding: 0.2rem 0.4rem; /* Very compact padding */
+    min-height: 28px; /* Smaller height */
   }
 
   .copy-button {
-    padding: 0.4rem 0.7rem;
-    font-size: 0.8rem;
-    gap: 0.3rem;
-    min-height: 36px; /* Smaller touch target matching room code */
-    border-radius: 0.6rem;
+    padding: 0.25rem 0.5rem; /* Very compact padding */
+    font-size: 0.75rem; /* Smaller font */
+    gap: 0.2rem; /* Minimal gap */
+    min-height: 28px; /* Match room code display height */
+    border-radius: 0.4rem; /* Smaller border radius */
     /* Better mobile touch feedback */
     -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
     transition: transform 0.1s ease, background 0.2s ease;

@@ -66,3 +66,135 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* === ULTRA COMPACT, CENTERED, RESPONSIVE LOBBY/ROOM OVERRIDES (TUNED) === */
+.app-container {
+  min-height: 100vh !important;
+  height: 100vh !important;
+  width: 100vw !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  background: transparent !important;
+}
+.main-content {
+  width: 100% !important;
+  max-width: 22rem !important;
+  margin: 0 auto !important;
+  padding: 0.7rem 1rem !important; /* Added subtle internal space */
+  border-radius: 0.7rem !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  min-height: unset !important;
+  max-height: unset !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
+  background: rgba(30, 30, 30, 0.98) !important; /* Subtle card background */
+}
+.room-screen {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.3rem !important; /* Small gap between cards */
+  margin: 0.1rem auto 0.2rem auto !important;
+  max-width: 100% !important;
+  padding: 0.2rem 0 !important; /* Small vertical padding */
+  width: 100% !important;
+  min-height: unset !important;
+  max-height: unset !important;
+  overflow: visible !important;
+}
+.room-info-card,
+.players-card,
+.game-settings-card {
+  padding: 0.5rem 0.7rem !important; /* Small internal space */
+  margin-bottom: 0.2rem !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  background: rgba(40, 40, 40, 0.96) !important; /* Subtle card background */
+}
+.players-list ul {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.players-list li {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important; /* Small gap between avatar and name */
+  color: #fff !important;
+  padding: 6px 8px !important; /* Small internal space */
+  min-height: 22px !important;
+  font-size: 0.95rem !important;
+  border-radius: 0.3rem !important;
+}
+.room-header {
+  margin-bottom: 0.2rem !important;
+}
+.room-code-section {
+  margin-bottom: 0.1rem !important;
+}
+.room-code-container {
+  gap: 0.2rem !important;
+}
+.room-code-display {
+  font-size: 1.1rem !important;
+  padding: 0.2rem 0.4rem !important;
+  min-height: 18px !important;
+  background: rgba(60, 60, 60, 0.85) !important;
+  border-radius: 0.3rem !important;
+}
+.player-count {
+  margin-top: 0.1rem !important;
+  margin-bottom: 0 !important;
+  font-size: 0.85rem !important;
+}
+@media (max-width: 768px) {
+  .app-container {
+    min-height: 100vh !important;
+    height: auto !important;
+    justify-content: flex-start !important;
+    padding: 0.1rem !important;
+    padding-top: 0.3rem !important;
+    padding-bottom: 0.7rem !important;
+  }
+  .main-content {
+    padding: 0.4rem 0.5rem !important;
+    max-width: 100% !important;
+    margin: 0.2rem auto !important;
+    border-radius: 0.5rem !important;
+  }
+  .room-screen {
+    gap: 0.15rem !important;
+    margin: 0.05rem auto 0.1rem auto !important;
+    max-width: 100% !important;
+    padding: 0.08rem 0 !important;
+  }
+  .room-info-card,
+  .players-card,
+  .game-settings-card {
+    padding: 0.3rem 0.4rem !important;
+    margin-bottom: 0.1rem !important;
+    border-radius: 0.3rem !important;
+  }
+  .players-list li {
+    gap: 4px !important;
+    padding: 3px 4px !important;
+    min-height: 16px !important;
+    font-size: 0.85rem !important;
+  }
+  .room-code-display {
+    font-size: 0.9rem !important;
+    padding: 0.1rem 0.2rem !important;
+    min-height: 12px !important;
+  }
+  .player-count {
+    font-size: 0.75rem !important;
+  }
+}
+/* === END ULTRA COMPACT OVERRIDES (TUNED) === */
